@@ -84,7 +84,7 @@ export default async function groupInfo(ctx) {
         catch (er) { toastError(er); e.target.disabled = false; } } }, 'Create & copy')] });
   }
   async function inviteByName() {
-    const u = await promptDialog({ title: 'Invite by username', label: 'Their general username (they must share it with you)', placeholder: 'User_123456', confirmText: 'Send invite' });
+    const u = await promptDialog({ title: 'Invite by username', label: 'Their general username (they must share it with you)', placeholder: 'e.g. SilentMoon27', confirmText: 'Send invite' });
     if (!u) return;
     try { await rpc('invite_user', { p_group: gid, p_username: u }); toast('If that username exists, they’ve been invited.', 'success', 4500); } catch (e) { toastError(e); }
   }

@@ -3,11 +3,45 @@ import { sb, rpc } from '../supabase.js';
 import { store, refreshAccount, signOut } from '../store.js';
 import { h, icon, setTitle, toast, toastError, withBusy, confirmDialog, modal, empty, errorState, skeletons, ago, errMsg } from '../ui.js';
 import { navigate } from '../router.js';
+import { clientKey } from '../clientkey.js';
 
 const tabs = (active) => h('nav', { class: 'tabs', 'aria-label': 'Settings sections' }, [['/settings', 'Account'], ['/settings/notifications', 'Notifications'], ['/settings/privacy', 'Privacy & safety']].map(([p, l]) =>
   h('a', { class: 'tab' + (p === active ? ' active' : ''), href: '#' + p, 'aria-current': p === active ? 'page' : null }, l)));
 const page = (active, ...kids) => h('div', { style: { maxWidth: '680px' } }, h('div', { class: 'page-head' }, h('h1', null, 'Settings')), tabs(active), ...kids);
 const pwProblem = (p) => p.length < 8 ? 'Use at least 8 characters.' : (!/[A-Za-z]/.test(p) || !/\d/.test(p)) ? 'Use a mix of letters and numbers.' : null;
+
+
+// ── signed-in devices ─────────────────────────────────────────
+const deviceName = (d) => [d.browser || 'Browser', d.os ? 'on ' + d.os : ''].join(' ').trim() + (d.device && d.device !== 'desktop' ? ' · ' + d.device : '');
+function devicesCard() {
+  const box = h('div', { class: 'stack', style: { gap: '8px' } }, skeletons(1, 48));
+  const all = h('button', { class: 'btn sm hidden' }, 'Sign out all other devices');
+  async function load() {
+    try {
+      const ds = await rpc('my_sessions', { p_client_key: clientKey() });
+      box.replaceChildren(...(ds.length ? ds.map((d) => h('div', { class: 'idrow' },
+        h('div', null, h('div', { style: { fontWeight: 600 } }, deviceName(d), d.current ? h('span', { class: 'tag ok', style: { marginLeft: '8px' } }, 'This device') : null),
+          h('div', { class: 'hint' }, 'Signed in ' + ago(d.created_at) + ' ago · last active ' + ago(d.last_seen_at) + ' ago')),
+        d.current ? null : h('button', { class: 'btn sm', onclick: (e) => withBusy(e.currentTarget, async () => { await rpc('revoke_my_session', { p_session: d.id }); toast('Device signed out', 'success', 1800); load(); }) }, 'Sign out')))
+        : [h('p', { class: 'muted small', style: { margin: 0 } }, 'No other devices.')]));
+      all.classList.toggle('hidden', ds.filter((d) => !d.current).length < 1);
+    } catch (e) { box.replaceChildren(errorState(e, load)); }
+  }
+  all.onclick = (e) => withBusy(e.currentTarget, async () => { const n = await rpc('revoke_my_other_sessions', { p_client_key: clientKey() }); toast(n ? 'Signed out of ' + n + ' other device' + (n > 1 ? 's' : '') : 'No other devices', 'success'); load(); });
+  load();
+  return h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Where you’re signed in')), box,
+    h('div', { class: 'row', style: { justifyContent: 'space-between', marginTop: '10px' } }, h('p', { class: 'hint', style: { margin: 0 } }, 'Using a phone and a laptop is normal. If you don’t recognise a device, sign it out and change your password.'), all));
+}
+
+// ── change email (the new address must be verified before it takes effect) ──
+function changeEmail(current) {
+  const box = h('input', { class: 'input', type: 'email', autocomplete: 'email', placeholder: 'new@example.com', 'aria-label': 'New email address' });
+  const m = modal({ title: 'Change your email', body: h('div', null, h('p', { class: 'muted small' }, 'We’ll send a verification link to the new address. Your email stays ' + current + ' until you open it.'), box),
+    actions: [h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Cancel'), h('button', { class: 'btn primary', onclick: (e) => withBusy(e.currentTarget, async () => {
+      const v = box.value.trim(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { toast('Enter a valid email address.', 'error'); return; }
+      const { error } = await sb.auth.updateUser({ email: v }, { emailRedirectTo: location.origin + location.pathname }); if (error) throw error;
+      m.close(); toast('Check the new inbox for a verification link.', 'success', 5000); }) }, 'Send link')] });
+}
 
 // ── account & security ────────────────────────────────────────
 export async function account() {
@@ -51,9 +85,10 @@ export async function account() {
   }
   return { el: page('/settings',
     h('div', { class: 'card' }, h('div', { class: 'card-title' }, h('b', null, 'Sign-in')),
-      h('div', { class: 'setting' }, h('div', null, h('div', { class: 'small muted' }, 'Email (private — never shown to anyone)'), h('div', null, email)), h('span', { class: 'tag ok' }, 'Verified')),
+      h('div', { class: 'setting' }, h('div', null, h('div', { class: 'small muted' }, 'Email (private — never shown to anyone)'), h('div', null, email)), h('div', { class: 'row' }, h('span', { class: 'tag ok' }, 'Verified'), h('button', { class: 'btn sm', onclick: () => changeEmail(email) }, 'Change'))),
       h('div', { class: 'setting' }, h('div', null, h('div', { class: 'small muted' }, 'Your general username'), h('div', { class: 'mono', style: { fontWeight: 650 } }, store.account.username)), h('a', { class: 'btn sm', href: '#/profile' }, 'Edit profile'))),
     h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Change password')), pwForm),
+    devicesCard(),
     h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Session')),
       h('div', { class: 'setting' }, h('div', null, 'Sign out on this device'), h('button', { class: 'btn', onclick: signOut }, icon('logout', 18), 'Sign out')),),
     h('div', { class: 'card', style: { marginTop: '16px', borderColor: 'rgba(240,140,157,.35)' } }, h('div', { class: 'card-title' }, h('b', { style: { color: 'var(--danger)' } }, 'Danger zone')),

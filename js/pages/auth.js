@@ -65,17 +65,39 @@ export function register() {
     });
   } });
   form.append(eW, pW, p2W, aW, msg, btn);
-  return shell(h('h1', null, 'Join anonymously'), h('p', { class: 'muted' }, 'No real name, no public profile. You’ll get a random username like ', h('span', { class: 'mono' }, 'User_839201'), ' the moment you sign up.'), form,
+  return shell(h('h1', null, 'Join anonymously'), h('p', { class: 'muted' }, 'No real name, no public profile. You’ll get a random username like ', h('span', { class: 'mono' }, 'SilentMoon27'), ' the moment you sign up.'), form,
     h('p', { class: 'small muted', style: { marginTop: '18px', textAlign: 'center' } }, 'Already have an account? ', h('a', { href: '#/login' }, 'Sign in')));
 }
 
 export function verify(ctx) {
   setTitle('Verify your email');
-  const email = ctx.query.email || '';
-  return shell(h('div', { class: 'empty', style: { padding: '10px 0' } }, h('div', { class: 'ico' }, icon('mail', 26)), h('h1', null, 'Check your email'),
-    h('p', null, email ? ['We sent a verification link to ', h('b', null, email), '.'] : 'We sent you a verification link.'), h('p', { class: 'small' }, 'Open it on this device to finish creating your account. It may take a minute — check spam too.'),
-    email ? h('button', { class: 'btn', onclick: (e) => withBusy(e.currentTarget, async () => { const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectTo() } }); if (error) throw error; toast('Sent again.', 'success'); }) }, 'Resend email') : null,
-    h('p', { style: { marginTop: '16px' } }, h('a', { href: '#/login' }, 'Back to sign in'))));
+  const expired = ctx.query.expired === '1';
+  let email = (ctx.query.email || '').trim();
+  const COOLDOWN = 60;
+  const typed = h('input', { class: 'input', type: 'email', autocomplete: 'email', placeholder: 'you@example.com', 'aria-label': 'Your email address', value: email });
+  const status = h('div', { class: 'small muted', role: 'status', style: { marginTop: '10px' } });
+  let left = 0, tick = null;
+  const btn = h('button', { class: 'btn primary', type: 'button' }, 'Resend verification email');
+  const paint = () => { btn.disabled = left > 0; btn.textContent = left > 0 ? `Resend in ${left}s` : 'Resend verification email'; };
+  function startCooldown() { left = COOLDOWN; paint(); clearInterval(tick); tick = setInterval(() => { left -= 1; paint(); if (left <= 0) clearInterval(tick); }, 1000); }
+  btn.onclick = () => withBusy(btn, async () => {
+    const addr = (email || typed.value).trim();
+    if (!emailOk(addr)) { status.textContent = 'Enter the email address you signed up with.'; typed.focus(); return; }
+    const { error } = await sb.auth.resend({ type: 'signup', email: addr, options: { emailRedirectTo: redirectTo() } });
+    if (error && !/rate|seconds|already/i.test(error.message)) throw error;
+    status.textContent = 'If that address is waiting to be verified, a new link is on its way. Links expire after a short time, so use the newest one.';
+    startCooldown();
+  });
+  if (email) startCooldown();
+  const heading = expired ? 'That link has expired' : 'Check your email';
+  const lead = expired ? h('p', null, 'Verification links only work for a short time (and only once). Enter your email and we’ll send a new one.')
+    : h('p', null, email ? ['We sent a verification link to ', h('b', null, email), '.'] : 'We sent you a verification link.');
+  return shell(h('div', { class: 'empty', style: { padding: '10px 0' } }, h('div', { class: 'ico' }, icon('mail', 26)), h('h1', null, heading), lead,
+    h('p', { class: 'small' }, 'Your account stays switched off until you open the link. Until then you can’t post, reply, join groups or send messages. Check your spam folder if it doesn’t arrive within a minute.'),
+    (!email || expired) ? h('div', { class: 'field', style: { textAlign: 'left', width: '100%' } }, typed) : null,
+    btn, status,
+    h('p', { class: 'small muted', style: { marginTop: '14px' } }, 'Typed the wrong email? ', h('a', { href: '#/register' }, 'Start again with the right one'), '. Verifying an email only shows you control it; it doesn’t prove who you are.'),
+    h('p', { style: { marginTop: '10px' } }, h('a', { href: '#/login' }, 'Back to sign in'))));
 }
 
 export function forgot() {

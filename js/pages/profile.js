@@ -6,6 +6,32 @@ import { openReport } from '../views/report.js';
 import { h, icon, avatar, avatarPicker, confirmDialog, toast, toastError, setTitle, withBusy, empty } from '../ui.js';
 import { navigate } from '../router.js';
 
+function suggestionBox() {
+  const cat = h('select', { class: 'select', 'aria-label': 'Type of suggestion' }, [['idea', 'An idea or feature'], ['problem', 'Something that isn’t working'], ['other', 'Something else']].map(([v, l]) => h('option', { value: v }, l)));
+  const text = h('textarea', { class: 'textarea', maxlength: 1000, rows: 4, placeholder: 'Tell us what would make UNSAID better…', 'aria-label': 'Your suggestion' });
+  const count = h('span', { class: 'hint' }, '0 / 1000');
+  const msg = h('div', { role: 'status', 'aria-live': 'polite' });
+  const send = h('button', { class: 'btn primary', type: 'submit' }, 'Send suggestion');
+  text.addEventListener('input', () => { count.textContent = text.value.length + ' / 1000'; });
+  const form = h('form', { novalidate: true, onsubmit: async (e) => {
+    e.preventDefault(); msg.replaceChildren();
+    if (text.value.trim().length < 10) { msg.replaceChildren(h('div', { class: 'error-text' }, 'Please write at least 10 characters.')); text.focus(); return; }
+    await withBusy(send, async () => {
+      try {
+        await rpc('submit_suggestion', { p_category: cat.value, p_body: text.value });
+        text.value = ''; count.textContent = '0 / 1000';
+        msg.replaceChildren(h('div', { class: 'alert success' }, 'Thank you! Your suggestion was sent to the UNSAID team.'));
+      } catch (er) { msg.replaceChildren(h('div', { class: 'error-text' }, (er && er.message) || 'Couldn’t send that. Please try again.')); }
+    });
+  } },
+    h('div', { class: 'field' }, h('label', null, 'What is it about?'), cat),
+    h('div', { class: 'field' }, text, h('div', { style: { textAlign: 'right' } }, count)),
+    msg, h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, send));
+  return h('div', { class: 'card', style: { marginTop: '16px' } },
+    h('div', { class: 'card-title' }, h('b', null, 'Suggestion box')),
+    h('p', { class: 'muted small', style: { marginTop: 0 } }, 'Share an idea, a problem or any feedback. Your name isn’t shown to the team.'), form);
+}
+
 export function myProfile() {
   setTitle('Profile');
   const a = store.account;
@@ -24,7 +50,8 @@ export function myProfile() {
       h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, save)),
     h('div', { class: 'alert info', style: { marginTop: '16px' } }, h('b', null, 'How your names work. '),
       'This general name is never shown inside groups or private chats. Each group and each private conversation gives you a different random name, and nobody — including group admins — can connect them.'),
-    h('div', { class: 'row wrap', style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '#/groups' }, icon('users', 18), 'See my group names'), h('a', { class: 'btn', href: '#/settings/privacy' }, icon('shield', 18), 'Privacy settings'))) };
+    h('div', { class: 'row wrap', style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '#/groups' }, icon('users', 18), 'See my group names'), h('a', { class: 'btn', href: '#/settings/privacy' }, icon('shield', 18), 'Privacy settings')),
+    suggestionBox()) };
 }
 
 export async function anonymousProfile(ctx) {

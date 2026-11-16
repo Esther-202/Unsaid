@@ -105,3 +105,15 @@
 .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-height: 220px; overflow: auto; }
 .emoji-grid button { font-size: 1.35rem; background: transparent; border: 0; border-radius: 8px; padding: 6px 0; }
 .emoji-grid button:hover { background: var(--surface-3); }
+
+/* ── Home: system prompt card ─────────────────────────────── */
+.prompt-card { position: relative; overflow: hidden; border: 1px solid rgba(169,157,243,.3); border-radius: var(--radius-lg); padding: 22px 22px 18px;
+  background: radial-gradient(120% 140% at 0% 0%, rgba(123,107,224,.28) 0%, rgba(20,25,48,.9) 55%), var(--surface); margin-bottom: 22px; }
+.prompt-card .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: .74rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+.prompt-card .q { font-size: clamp(1.18rem, 3.6vw, 1.55rem); line-height: 1.32; font-weight: 700; margin: 10px 0 16px; letter-spacing: -.01em; text-wrap: balance; }
+.prompt-card .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.prompt-card .acts .spacer { flex: 1; }
+.prompt-card.swap .q { animation: promptIn .35s ease; }
+@keyframes promptIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .prompt-card.swap .q { animation: none; } }
+.home-note { margin: 0 0 18px; }

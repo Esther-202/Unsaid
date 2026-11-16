@@ -58,8 +58,12 @@ export default async function groupChat(ctx) {
     watch: (cbs) => watchGroup(gid, cbs),
   };
 
+  // a prompt chosen on Home arrives here as a draft (only used once, only for the group picked)
+  let draft = '';
+  try { const d = JSON.parse(sessionStorage.getItem('unsaid.draft') || 'null'); if (d && d.group === gid && Date.now() - d.at < 120000) draft = String(d.text || ''); sessionStorage.removeItem('unsaid.draft'); } catch { /* storage unavailable */ }
+
   chat = createChat({
-    kind: 'group', id: gid, adapter, header: head, canPost, lockedText, focusId: ctx.query.m || null,
+    kind: 'group', id: gid, adapter, header: head, canPost, lockedText, focusId: ctx.query.m || null, draft,
     caps: { staff, poll: canPost, announce: staff && canPost },
     onProfile: (m) => navigate(`/p/${gid}/${m.identity_id}`),
     onReport: (m) => openReport({ type: m.image_path && !m.body ? 'image' : 'group_message', group: gid, message: m.id, label: `Message from ${m.username}` }),

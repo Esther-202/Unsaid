@@ -8,6 +8,7 @@ export default function groupCreate() {
   let img = null;
   const name = h('input', { class: 'input', id: 'gname', maxlength: 60, placeholder: 'e.g. Night Owls', required: true });
   const desc = h('textarea', { class: 'textarea', maxlength: 500, placeholder: 'What is this group about?' });
+  try { const t = sessionStorage.getItem('unsaid.groupdraft'); if (t) { desc.value = 'A place to talk about: ' + t; sessionStorage.removeItem('unsaid.groupdraft'); } } catch { /* storage unavailable */ }
   const rules = h('textarea', { class: 'textarea', maxlength: 2000, placeholder: '1. Be kind.\n2. No spam.' });
   const cat = h('select', { class: 'select' }, CATEGORIES.map(([k, l]) => h('option', { value: k }, l)));
   const preview = h('div', null, groupAvatar(null, 'G', 72));

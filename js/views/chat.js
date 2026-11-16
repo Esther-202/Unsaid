@@ -200,6 +200,7 @@ export function createChat(opts) {
 
   // ── composer ────────────────────────────────────────────────
   let ta, sendBtn, emojiBox;
+  let pendingDraft = String(opts.draft || '');   // optional prefilled text (e.g. from a Home prompt)
   async function pickImage() {
     const inp = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp' });
     inp.onchange = async () => { try { attach = await prepareImage(inp.files[0]); renderComposer(); } catch (e) { toastError(e); } };
@@ -218,7 +219,8 @@ export function createChat(opts) {
     } catch (e) { toastError(e); sendBtn.disabled = false; }
   }
   function renderComposer() {
-    const keep = ta?.value || '';
+    const keep = ta ? ta.value : pendingDraft;
+    pendingDraft = '';
     clear(composerWrap);
     if (!canPost) { composerWrap.append(h('div', { class: 'locked-note', style: { margin: '-8px -10px' } }, lockedText || 'You can’t post here.')); return; }
     if (replyTo) composerWrap.append(h('div', { class: 'replying' }, icon('reply', 16), h('div', { class: 'grow truncate' }, h('b', null, replyTo.username), ' ' + (replyTo.body || '📷 Photo')),
@@ -228,7 +230,7 @@ export function createChat(opts) {
     if (attach) composerWrap.append(h('div', { class: 'attach-preview' }, h('img', { src: attach.url, alt: 'Selected image preview' }),
       h('button', { class: 'btn icon sm', 'aria-label': 'Remove image', onclick: () => { attach = null; renderComposer(); } }, icon('x', 14))));
     emojiBox = h('div', { class: 'hidden', style: { marginBottom: '8px' } }, emojiPicker((e) => { ta.setRangeText(e, ta.selectionStart, ta.selectionEnd, 'end'); ta.focus(); }));
-    ta = h('textarea', { rows: 1, placeholder: announceMode ? 'Write an announcement…' : (isGroup ? 'Message the group anonymously…' : 'Write a message…'), maxlength: 4000, 'aria-label': 'Message' });
+    ta = h('textarea', { rows: 1, placeholder: announceMode ? 'Write an announcement…' : (isGroup ? 'Message the group…' : 'Write a message…'), maxlength: 4000, 'aria-label': 'Message' });
     ta.value = keep;
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(hover: hover)').matches) { e.preventDefault(); submit(); } });

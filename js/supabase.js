@@ -1,10 +1,10 @@
 // Supabase client + a thin RPC wrapper. All app data goes through RPCs
 // (SECURITY DEFINER functions) — the browser never touches identity tables.
-import { SUPABASE_URL, SUPABASE_ANON_KEY, SDK_URL, isConfigured } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isConfigured } from './config.js';
 
 export let sb = null;
 if (isConfigured()) {
-  const { createClient } = await import(SDK_URL);
+  const { createClient } = await import('./vendor/supabase.js');
   sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
     realtime: { params: { eventsPerSecond: 10 } },

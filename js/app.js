@@ -17,6 +17,7 @@ if (!isConfigured()) {
 const { store, initStore, subscribe, refreshAccount, refreshCounts, isActive, signOut } = await import('./store.js');
 const { route, setMount, setGuard, navigate, start, resolve, parseHash } = await import('./router.js');
 const { startNotificationWatcher, stopNotificationWatcher } = await import('./realtime.js');
+const { startSessionWatch, stopSessionWatch } = await import('./session.js');
 
 // ── routes ───────────────────────────────────────────────────
 const lazy = (file, fn = 'default') => (ctx) => import(file).then((m) => m[fn](ctx));
@@ -123,26 +124,31 @@ setMount((layout, node, opts, path) => {
 subscribe((evt) => {
   if (evt === 'account' || evt === 'counts') paintChrome();
   if (evt === 'signedin') {
-    startNotificationWatcher(); refreshCounts();
+    startNotificationWatcher(); startSessionWatch(); refreshCounts();
     const { path } = parseHash();
     if (['/', '/login', '/register', '/forgot'].includes(path)) { const next = sessionStorage.getItem('unsaid.next'); sessionStorage.removeItem('unsaid.next'); navigate(next && next.startsWith('#/') ? next : (isActive() ? '/home' : '/account'), { replace: true }); }
     else resolve();
   }
-  if (evt === 'signedout') { stopNotificationWatcher(); navigate('/', { replace: true }); }
+  if (evt === 'signedout') { stopNotificationWatcher(); stopSessionWatch(); navigate('/', { replace: true }); }
   if (evt === 'recovery') navigate('/reset', { replace: true });
 });
 
 // ── boot ─────────────────────────────────────────────────────
 const url = new URL(location.href);
-const authError = url.searchParams.get('error_description') || new URLSearchParams(location.hash.split('?')[1] || '').get('error_description');
+const hashParams = new URLSearchParams((location.hash.split('?')[1] || '') || location.hash.replace(/^#/, ''));
+const authError = url.searchParams.get('error_description') || hashParams.get('error_description');
+const authErrorCode = url.searchParams.get('error_code') || hashParams.get('error_code') || '';
 const recoveryFlow = url.searchParams.get('flow') === 'recovery';
 await initStore();
 if (url.searchParams.has('code') || url.searchParams.has('flow') || url.searchParams.has('error_description')) {
   ['code', 'flow', 'error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
   history.replaceState(null, '', url.pathname + (url.search || '') + (location.hash || ''));
 }
-if (authError) toast(authError.replace(/\+/g, ' '), 'error', 7000);
-if (store.session) startNotificationWatcher();
+if (authError) {
+  if (/expired|invalid/i.test(authErrorCode + ' ' + authError)) { history.replaceState(null, '', recoveryFlow ? '#/forgot' : '#/verify?expired=1'); if (recoveryFlow) toast('That reset link has expired. Request a new one.', 'error', 7000); }
+  else toast(authError.replace(/\+/g, ' '), 'error', 7000);
+}
+if (store.session) { startNotificationWatcher(); startSessionWatch(); }
 if (recoveryFlow && store.session) history.replaceState(null, '', '#/reset');
 else if (store.session && (!location.hash || location.hash === '#/')) history.replaceState(null, '', isActive() ? '#/home' : '#/account');
 await start();

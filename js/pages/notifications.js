@@ -15,7 +15,7 @@ export default async function notifications() {
 
   async function open(n) {
     try { if (!n.read) { await rpc('mark_notifications_read', { p_ids: [n.id] }); n.read = true; refreshCounts(); } } catch { /* non-fatal */ }
-    if (n.link) navigate(n.link.replace(/^#/, ''));
+    if (/^#\//.test(n.link || '')) navigate(n.link.replace(/^#/, ''));
     else paint();
   }
   function paint() {

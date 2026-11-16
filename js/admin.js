@@ -2,7 +2,7 @@
 // Access is enforced by the database: every admin_* function refuses non-admins ("Not found").
 // Looking up the account behind a report is written to the audit log by the database itself.
 import { isConfigured } from './config.js';
-import { h, $, icon, loading, toast, toastError, errMsg, confirmDialog, withBusy, empty, errorState, skeletons, dateTime, ago, debounce } from './ui.js';
+import { h, $, icon, loading, promptDialog, toast, toastError, errMsg, confirmDialog, withBusy, empty, errorState, skeletons, dateTime, ago, debounce } from './ui.js';
 
 const app = document.getElementById('app');
 if (!isConfigured()) { app.replaceChildren(h('p', { style: { padding: '24px' } }, 'Configure js/config.js first.')); throw new Error('not configured'); }
@@ -33,7 +33,7 @@ if (!me.is_admin || me.status !== 'active') { notFound(); throw new Error('not a
 document.title = 'UNSAID Admin';
 
 // ── helpers ───────────────────────────────────────────────────
-const statusTag = (st) => h('span', { class: 'tag ' + ({ active: 'ok', restricted: 'warn', suspended: 'danger', banned: 'danger', deactivated: '', pending: 'warn', investigating: 'warn', resolved: 'ok', dismissed: '' }[st] || '') }, st);
+const statusTag = (st) => h('span', { class: 'tag ' + ({ active: 'ok', restricted: 'warn', suspended: 'danger', banned: 'danger', deactivated: '', unverified: 'warn', pending: 'warn', investigating: 'warn', resolved: 'ok', dismissed: '', new: 'warn', reviewed: 'ok', planned: 'ok', done: 'ok', open: 'warn', medium: 'warn', low: '' }[st] || '') }, st);
 const table = (cols, rows, onClick) => h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, cols.map((c) => h('th', null, c)))),
   h('tbody', null, rows.length ? rows.map(([cells, key]) => h('tr', { class: onClick ? 'click' : '', tabindex: onClick ? 0 : null, onclick: onClick ? () => onClick(key) : null, onkeydown: onClick ? (e) => { if (e.key === 'Enter') onClick(key); } : null }, cells.map((c) => h('td', null, c))))
     : [h('tr', null, h('td', { colspan: cols.length, class: 'muted' }, 'Nothing here yet.'))])));
@@ -42,12 +42,12 @@ const card = (title, ...kids) => h('div', { class: 'card', style: { marginBottom
 const fmt = (s) => String(s || '').replace(/_/g, ' ');
 
 // ── shell ─────────────────────────────────────────────────────
-const NAV = [['/', 'Overview'], ['/reports', 'Reports'], ['/users', 'Users'], ['/actions', 'Moderation log'], ['/audit', 'Audit log']];
+const NAV = [['/', 'Overview'], ['/reports', 'Reports'], ['/users', 'Users'], ['/security', 'Security'], ['/suggestions', 'Suggestions'], ['/actions', 'Moderation log'], ['/audit', 'Audit log']];
 const content = h('main', { class: 'admin-body', id: 'view' });
 const nav = h('nav', { class: 'row wrap', 'aria-label': 'Admin sections' }, NAV.map(([p, l]) => h('a', { class: 'chip', href: '#' + p, dataset: { p } }, l)));
 app.replaceChildren(h('div', { class: 'admin-shell' }, h('header', { class: 'admin-top' }, h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('shield', 17)), 'UNSAID Admin'), nav,
   h('div', { class: 'role row' }, h('span', { class: 'tag admin' }, me.is_admin ? 'Platform admin' : ''), h('a', { class: 'btn sm ghost', href: 'index.html' }, 'Open app'),
-    h('button', { class: 'btn sm', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, icon('logout', 16), 'Sign out'))), content));
+    h('button', { class: 'btn sm', onclick: async () => { await sb.auth.signOut({ scope: 'local' }); location.reload(); } }, icon('logout', 16), 'Sign out'))), content));
 setMount((layout, node, opts, path) => {
   nav.querySelectorAll('a').forEach((a) => { const p = a.dataset.p; a.classList.toggle('on', p === '/' ? path === '/' : path.startsWith(p)); });
   content.replaceChildren(node ? (node.el ?? node) : loading('Loading'));
@@ -59,6 +59,8 @@ route('/reports', reports, { layout: 'admin' });
 route('/reports/:id', reportDetail, { layout: 'admin' });
 route('/users', users, { layout: 'admin' });
 route('/users/:id', userDetail, { layout: 'admin' });
+route('/security', security, { layout: 'admin' });
+route('/suggestions', suggestions, { layout: 'admin' });
 route('/actions', actionsLog, { layout: 'admin' });
 route('/audit', auditLog, { layout: 'admin' });
 route('/__404__', () => ({ el: empty('search', 'Not found', '', h('a', { class: 'btn', href: '#/' }, 'Overview')) }), { notFound: true, layout: 'admin' });
@@ -153,8 +155,8 @@ async function reportDetail(ctx) {
 // ── users ─────────────────────────────────────────────────────
 async function users() {
   let q = '', st = '';
-  const input = h('input', { class: 'input', type: 'search', placeholder: 'Search by email, generated username (User_…) or account ID', 'aria-label': 'Search accounts' });
-  const sel = h('select', { class: 'select', 'aria-label': 'Status filter', style: { maxWidth: '200px' } }, [['', 'Any status'], ['active', 'Active'], ['restricted', 'Restricted'], ['suspended', 'Suspended'], ['banned', 'Banned'], ['deactivated', 'Deactivated']].map(([v, l]) => h('option', { value: v }, l)));
+  const input = h('input', { class: 'input', type: 'search', placeholder: 'Search by email, generated username (like SilentMoon27) or account ID', 'aria-label': 'Search accounts' });
+  const sel = h('select', { class: 'select', 'aria-label': 'Status filter', style: { maxWidth: '200px' } }, [['', 'Any status'], ['active', 'Active'], ['unverified', 'Email not verified'], ['restricted', 'Restricted'], ['suspended', 'Suspended'], ['banned', 'Banned'], ['deactivated', 'Deactivated']].map(([v, l]) => h('option', { value: v }, l)));
   const body = h('div', null, skeletons(4, 54)); let seq = 0;
   async function load() {
     const my = ++seq; body.replaceChildren(skeletons(4, 54));
@@ -173,13 +175,77 @@ async function userDetail(ctx) {
   const d = await rpc('admin_get_account', { p_account: id });
   const a = d.account, act = d.activity;
   const reload = () => navigate('/users/' + id);
+  const sessionsBox = h('div', null, skeletons(1, 48));
+  async function loadSessions() {
+    try {
+      const ss = await rpc('admin_get_sessions', { p_account: id });
+      sessionsBox.replaceChildren(table(['Browser', 'System', 'Signed in', 'Last active', ''], ss.map((x) => [[x.browser || '—', (x.os || '—') + (x.device && x.device !== 'desktop' ? ' · ' + x.device : ''), ago(x.created_at) + ' ago', ago(x.last_seen_at) + ' ago',
+        x.revoked_at ? h('span', { class: 'tag' }, 'signed out' + (x.revoked_by ? ' by ' + x.revoked_by : '')) : (a.is_admin ? '' : h('button', { class: 'btn sm danger', onclick: (e) => revokeSession(e.currentTarget, x.id, loadSessions) }, 'Revoke'))], x.id])));
+    } catch (e) { sessionsBox.replaceChildren(errorState(e, loadSessions)); }
+  }
+  loadSessions();
   return { el: h('div', null, h('div', { class: 'page-head' }, h('div', { class: 'row' }, h('a', { class: 'btn ghost', href: '#/users' }, icon('back', 16), 'Accounts'), h('h1', { class: 'mono' }, a.username), statusTag(a.status))),
     h('div', { class: 'split' },
       h('div', null, card('Account', accountCard(a)),
+        card('Signed-in devices', h('p', { class: 'hint', style: { marginTop: 0 } }, 'Browser family and system only. No IP addresses or fingerprints are collected. Two devices are normal.'), sessionsBox),
         card('Activity', kv([['Group messages', act.group_messages], ['Private messages', act.dm_messages], ['Groups joined', act.groups_joined], ['Times blocked', act.blocks_received]])),
         card('Reports against this account', table(['When', 'Type', 'Reason', 'Status'], d.reports.map((p) => [[ago(p.created_at), fmt(p.target_type), fmt(p.category), statusTag(p.status)], p.id]), (rid) => navigate('/reports/' + rid)))),
       h('div', null, a.is_admin ? card('Moderation', h('p', { class: 'muted' }, 'Platform admins can’t be moderated from here.')) : card('Moderate this account', actionForm(a.account_id, null, reload)),
         card('Moderation history', table(['When', 'Admin', 'Action', 'Reason'], d.actions.map((m) => [[ago(m.created_at), m.admin_label, h('span', { class: 'tag' }, fmt(m.action)), m.reason], m.id])))))) };
+}
+
+async function revokeSession(btn, sessionId, after) {
+  const why = await promptReason('Revoke this session?', 'The device is signed out immediately and the reason is logged.');
+  if (why === null) return;
+  await withBusy(btn, async () => { await rpc('admin_revoke_session', { p_session: sessionId, p_reason: why }); toast('Session revoked', 'success'); after && after(); });
+}
+const promptReason = (title, message) => promptDialog({ title, label: message, placeholder: 'Reason (recorded in the audit log)', confirmText: 'Revoke', multiline: true });
+
+// ── security: suspicious-activity flags ───────────────────────
+const FLAG_TEXT = {
+  many_active_sessions: ['Many signed-in devices', (d) => `${d.active_sessions} active logins at once`],
+  rapid_new_sessions: ['Many new logins in an hour', (d) => `${d.new_in_last_hour} new logins within an hour`],
+  many_browsers_24h: ['Many different browsers in a day', (d) => `${d.browser_system_combinations} different browser/system combinations in 24 hours`],
+};
+async function security() {
+  let filter = 'open';
+  const body = h('div', null, skeletons(3, 54)); const chips = h('div', { class: 'chips', style: { marginBottom: '14px' } });
+  async function load() {
+    chips.replaceChildren(...[['open', 'Open'], ['reviewed', 'Reviewed'], ['dismissed', 'Dismissed'], ['', 'All']].map(([k, l]) => h('button', { class: 'chip' + (filter === k ? ' on' : ''), onclick: () => { filter = k; load(); } }, l)));
+    body.replaceChildren(skeletons(3, 54));
+    try {
+      const r = await rpc('admin_list_flags', { p_status: filter || null, p_limit: 100 });
+      body.replaceChildren(table(['When', 'Account', 'Signal', 'Details', 'Level', 'Status', ''], r.items.map((f) => { const [t, d] = FLAG_TEXT[f.kind] || [fmt(f.kind), () => '']; return [[ago(f.created_at) + ' ago', h('a', { href: '#/users/' + f.account_id, class: 'mono' }, f.username || 'account'), t, d(f.detail || {}), statusTag(f.severity), statusTag(f.status),
+        f.status === 'open' ? h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); withBusy(e.currentTarget, async () => { await rpc('admin_review_flag', { p_flag: f.id, p_status: 'reviewed' }); load(); }); } }, 'Reviewed'),
+          h('button', { class: 'btn sm ghost', onclick: (e) => { e.stopPropagation(); withBusy(e.currentTarget, async () => { await rpc('admin_review_flag', { p_flag: f.id, p_status: 'dismissed' }); load(); }); } }, 'Dismiss')) : ''], f.id]; })));
+    } catch (e) { body.replaceChildren(errorState(e, load)); }
+  }
+  load();
+  return { el: h('div', null, h('div', { class: 'page-head' }, h('h1', null, 'Security')),
+    h('div', { class: 'alert info', style: { marginBottom: '14px' } }, h('b', null, 'Flags are signals, not verdicts. '), 'Using a phone and a laptop is normal, so nothing here blocks or punishes anyone automatically. Open an account to see its devices, and revoke a session if it looks like abuse. No IP addresses or fingerprints are collected.'),
+    chips, body) };
+}
+
+// ── suggestion box ────────────────────────────────────────────
+async function suggestions() {
+  let filter = 'new';
+  const body = h('div', null, skeletons(3, 70)); const chips = h('div', { class: 'chips', style: { marginBottom: '14px' } });
+  async function load() {
+    body.replaceChildren(skeletons(3, 70));
+    try {
+      const r = await rpc('admin_list_suggestions', { p_status: filter || null, p_limit: 100 });
+      chips.replaceChildren(...[['new', 'New'], ['reviewed', 'Reviewed'], ['planned', 'Planned'], ['done', 'Done'], ['dismissed', 'Dismissed'], ['', 'All']].map(([k, l]) => h('button', { class: 'chip' + (filter === k ? ' on' : ''), onclick: () => { filter = k; load(); } }, l + (k && r.counts[k] ? ' (' + r.counts[k] + ')' : ''))));
+      body.replaceChildren(...(r.items.length ? r.items.map((s) => {
+        const note = h('input', { class: 'input', maxlength: 500, placeholder: 'Note (optional)', value: s.admin_note || '', 'aria-label': 'Note' });
+        const set = (st) => (e) => withBusy(e.currentTarget, async () => { await rpc('admin_update_suggestion', { p_id: s.id, p_status: st, p_note: note.value }); toast('Saved', 'success', 1200); load(); });
+        return card(null, h('div', { class: 'row between' }, h('div', { class: 'row' }, h('span', { class: 'tag' }, fmt(s.category)), statusTag(s.status)), h('span', { class: 'hint' }, ago(s.created_at) + ' ago')),
+          h('p', { style: { margin: '10px 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, s.body), note,
+          h('div', { class: 'row wrap', style: { marginTop: '10px' } }, ['reviewed', 'planned', 'done', 'dismissed'].map((st) => h('button', { class: 'btn sm' + (s.status === st ? ' primary' : ''), onclick: set(st) }, fmt(st)))));
+      }) : [h('p', { class: 'muted' }, 'Nothing here yet.')]));
+    } catch (e) { body.replaceChildren(errorState(e, load)); }
+  }
+  load();
+  return { el: h('div', null, h('div', { class: 'page-head' }, h('h1', null, 'Suggestions')), h('p', { class: 'hint' }, 'You see what people wrote, never who wrote it.'), chips, body) };
 }
 
 // ── logs ──────────────────────────────────────────────────────

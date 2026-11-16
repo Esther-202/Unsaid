@@ -31,4 +31,8 @@ export async function initStore() {
   store.ready = true;
 }
 export const isActive = () => ['active', 'restricted'].includes(store.account?.status);
-export async function signOut() { await sb.auth.signOut(); }
+// Signs out THIS device only (other devices stay signed in) and really ends the login on the server.
+export async function signOut() {
+  try { const { clientKey } = await import('./clientkey.js'); await rpc('end_current_session', { p_client_key: clientKey() }); } catch { /* best effort */ }
+  await sb.auth.signOut({ scope: 'local' });
+}

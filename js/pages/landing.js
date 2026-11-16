@@ -12,7 +12,7 @@ export default function landing() {
       h('div', { class: 'cta' }, h('a', { class: 'btn primary', href: '#/register' }, 'Create your anonymous account'), h('a', { class: 'btn', href: '#/login' }, 'I already have one'))),
     h('section', { class: 'identity-demo', 'aria-label': 'How identities work' }, h('div', { class: 'card' },
       h('h3', null, 'One person. Many unconnected identities.'), h('p', { class: 'muted small', style: { margin: 0 } }, 'Every group and every private chat gives you a brand-new random name. Nobody can link them together.'),
-      [['Late-night confessions', 'User_472915'], ['Career advice', 'User_106384'], ['Private chat', 'User_638201']].map(([w, n]) => h('div', { class: 'idrow' }, h('span', { class: 'muted' }, w), h('b', { class: 'mono' }, n))))),
+      [['Late-night confessions', 'SilentMoon27'], ['Career advice', 'BlueOrbit23'], ['Private chat', 'QuietStar91']].map(([w, n]) => h('div', { class: 'idrow' }, h('span', { class: 'muted' }, w), h('b', { class: 'mono' }, n))))),
     h('section', { class: 'features' },
       feat('ghost', 'Separate identity everywhere', 'A different anonymous username in every group and conversation — enforced by the database, not just the screen.'),
       feat('users', 'Communities with real control', 'Public or private groups, invite links, polls, announcements and moderators — all anonymous.'),

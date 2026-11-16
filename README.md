@@ -6,7 +6,8 @@ Anonymous communities + private chats. Plain HTML/CSS/JavaScript (no build step)
 
 1. **Create a Supabase project** (supabase.com → New project).
 2. **Create the database**: Dashboard → SQL Editor → paste `supabase/unsaid_all_in_one.sql` → Run.
-   - Or run separately, in order: `01_schema` → `02_core_functions` → `03_messaging_functions` → `04_moderation_functions` → `05_security`.
+   - Or run separately, in order: `01_schema` → `02_core_functions` → `03_messaging_functions` → `04_moderation_functions` → `05_security` → `07_upgrade`.
+   - **Already have 01–05 installed?** Run `07a_limits.sql`, then `07b_usernames_suggestions.sql`, then `07c_security.sql` (small files, safe to repeat; `07_upgrade.sql` is the same three in one file). It adds the limits, the new usernames, the suggestion box and the security features, and keeps all existing data.
    - Re-run `05_security.sql` any time you change a function or table.
 3. **Auth settings** (Dashboard → Authentication):
    - Providers → Email: enable, keep **Confirm email** ON.
@@ -15,6 +16,21 @@ Anonymous communities + private chats. Plain HTML/CSS/JavaScript (no build step)
 5. **Run it**: serve the folder with any static server, e.g. `python3 -m http.server 8080` then open `http://localhost:8080`.
 6. **Make yourself platform admin**: register in the app, confirm your email, then edit the email in `supabase/06_make_admin.sql` and run it. Open `/admin.html` (not linked anywhere in the app).
 7. **Check it** (optional): run `supabase/tests/rls_tests.sql` in the SQL Editor. It rolls back and ends with `ALL TESTS PASSED`.
+
+## Settings to switch on in Supabase (Dashboard)
+
+| Where | Setting | Why |
+|---|---|---|
+| Authentication → Sign In / Providers → Email | **Confirm email: ON** | Accounts stay inactive until the email is verified (the database also refuses unverified accounts) |
+| Authentication → Sign In / Providers → Email | **Email OTP / link expiry: 3600 seconds** (1 hour) | Verification links expire quickly |
+| Authentication → Sign In / Providers | **Prevent use of leaked passwords**, minimum length 8 | Stronger passwords |
+| Authentication → Rate Limits | Lower sign-ups / sign-ins per hour | Slows mass registration and password guessing |
+| Authentication → Attack Protection | **CAPTCHA** (Turnstile or hCaptcha) | Stops bots creating accounts |
+| Authentication → Sessions | Optional: *inactivity timeout* / *time-box* (paid plans) | Persistent login stays on by default (refresh tokens); this sets how long |
+| Authentication → URL Configuration | Site URL + Redirect URLs = your live address | Verification and reset links open the right place |
+| Project → Advisors | Run **Security** and **Performance** advisors | Catches mistakes before launch |
+
+Persistent login: Supabase keeps people signed in with a refresh token stored by the browser, so closing and reopening the site does not ask for a password again. Logging out ends that login on the server (this device only). Passwords are never stored in the browser.
 
 ## Files
 
@@ -29,11 +45,12 @@ Anonymous communities + private chats. Plain HTML/CSS/JavaScript (no build step)
 | `js/admin.js` | Platform dashboard: overview, report queue + investigation, users, moderation log, audit log |
 | `supabase/01…05*.sql` | Tables, identity functions, messaging, moderation, RLS/storage/realtime |
 | `supabase/06_make_admin.sql` | Grants admin (run once, by you) |
-| `supabase/tests/rls_tests.sql` | 130 checks for anonymity, RLS, moderation, suspensions |
+| `supabase/07_upgrade.sql` | One upgrade for existing databases: usage limits (5 new private chats / 12 h, 3 groups per person, 3 new groups / day) · SilentMoon27-style usernames (existing users migrated) · suggestion box · verified-email gate · login-session tracking & suspicious-activity flags |
+| `supabase/tests/` | `rls_tests.sql` (130 checks: anonymity, RLS, moderation) · `limits_tests.sql` · `upgrade_tests.sql` (usernames, suggestions, verified email, sessions, flags) |
 
 ## How anonymity works
 
-- **Three separate name spaces**: general (`User_839201`), one per group, one per private chat — all `User_` + random digits, unique.
+- **Three separate name spaces**: general (e.g. `SilentMoon27`), one per group, one per private chat — each a random Adjective + Noun + number, unique, and never derived from any personal information.
 - Mapping tables (account ↔ name) have **no API access at all**. The browser only calls audited `SECURITY DEFINER` functions that return the name for the current context.
 - Group admins see group names only. Only platform admins can resolve a reported name → account, and each lookup is written to `audit_logs`.
 - Private chats need an accepted request. Declined requests create nothing.
@@ -51,6 +68,7 @@ Anonymous communities + private chats. Plain HTML/CSS/JavaScript (no build step)
 
 - **Security headers**: `frame-ancestors` can’t be set from a `<meta>` tag. Set `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`) on your host.
 - **Storage uploader**: Supabase records uploader IDs on storage objects. `05_security.sql` blanks it with a trigger *if your role is allowed to*; if the SQL Editor prints a notice that it couldn’t, uploads remain unlinkable from the app but not from the Supabase dashboard.
-- **Network-level anonymity** (IP addresses) is outside the app. Supabase and your host see IPs.
+- **Network-level anonymity** (IP addresses) is outside the app. Supabase and your host see IPs. The app itself loads no third-party code or fonts (Inter and supabase-js are self-hosted in `assets/fonts` and `js/vendor`), so no other company sees visitors' IPs. Links that users post open other sites, which see the IP of whoever clicks.
 - **Rate limits** are enforced in the database (messages, requests, reports, group creation, etc.). Add Supabase Auth rate limits and CAPTCHA (Authentication → Rate Limits / Attack Protection) before a public launch.
-- Email is required for sign-up; admins can see it only while investigating a report.
+- Email is required for sign-up; admins can see it only while investigating a report. Verifying an email proves control of that inbox, not a person's identity, and the app never claims otherwise.
+- **Sessions & flags**: the app records the browser family, system and device type of each login (no IP addresses, no fingerprinting). Flags are signals for a human to review; nothing is punished automatically, because a phone plus a laptop is normal.
