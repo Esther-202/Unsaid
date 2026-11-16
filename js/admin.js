@@ -12,17 +12,20 @@ const { route, setMount, navigate, start } = await import('./router.js');
 
 const notFound = () => { document.title = 'Not found'; app.replaceChildren(h('div', { class: 'empty', style: { paddingTop: '20vh' } }, h('h1', null, '404'), h('p', null, 'This page could not be found.'))); };
 
+import { captchaBox } from './captcha.js';
 // ── sign-in (admins sign in here; nothing reveals whether this page is an admin area) ──
 function login() {
   document.title = 'Sign in';
   const email = h('input', { class: 'input', type: 'email', autocomplete: 'username', required: true, 'aria-label': 'Email' });
   const pw = h('input', { class: 'input', type: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
   const err = h('div', { class: 'error-text', role: 'alert' });
+  const cap = captchaBox();
   const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Continue');
   app.replaceChildren(h('div', { class: 'auth-wrap' }, h('form', { class: 'auth-card', onsubmit: (e) => { e.preventDefault(); err.textContent = '';
-    withBusy(btn, async () => { const { error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pw.value });
+    withBusy(btn, async () => { let captchaToken; try { captchaToken = await cap.token(); } catch (er) { err.textContent = er.message; return; }
+      const { error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pw.value, options: { captchaToken } }); cap.reset();
       if (error) { err.textContent = 'Those details didn’t work.'; return; } location.reload(); }); } },
-    h('h1', null, 'Sign in'), h('div', { class: 'field' }, h('label', null, 'Email'), email), h('div', { class: 'field' }, h('label', null, 'Password'), pw), err, btn)));
+    h('h1', null, 'Sign in'), h('div', { class: 'field' }, h('label', null, 'Email'), email), h('div', { class: 'field' }, h('label', null, 'Password'), pw), cap.el, err, btn)));
 }
 
 const { data: s } = await sb.auth.getSession();

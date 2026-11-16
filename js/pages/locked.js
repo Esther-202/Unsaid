@@ -1,3 +1,4 @@
+import { captchaBox } from '../captcha.js';
 // Shown when the account is suspended, banned or deactivated.
 import { rpc, sb } from '../supabase.js';
 import { store, refreshAccount, signOut } from '../store.js';
@@ -19,10 +20,10 @@ export default async function locked() {
     return h('div', { class: 'auth-wrap' }, h('p', null, 'Signing out…'));
   }
   if (a.status === 'unverified') {
-    const { data } = await sb.auth.getUser(); const email = data?.user?.email || '';
+    const lcap = captchaBox(); const { data } = await sb.auth.getUser(); const email = data?.user?.email || '';
     body = [h('h1', null, 'Verify your email to continue'), h('p', { class: 'muted' }, 'Your account isn’t active yet. Open the link we sent' + (email ? ' to ' + email : '') + ' to turn it on. Until then you can’t post, reply, join groups or send messages.'),
-      h('div', { class: 'row wrap' }, h('button', { class: 'btn primary', onclick: (e) => withBusy(e.currentTarget, async () => {
-        const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: location.origin + location.pathname } }); if (error) throw error; toast('Verification email sent.', 'success'); }) }, 'Resend verification email'), out)];
+      lcap.el, h('div', { class: 'row wrap' }, h('button', { class: 'btn primary', onclick: (e) => withBusy(e.currentTarget, async () => {
+        const captchaToken = await lcap.token(); const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: location.origin + location.pathname, captchaToken } }); lcap.reset(); if (error) throw error; toast('Verification email sent.', 'success'); }) }, 'Resend verification email'), out)];
   } else if (a.status === 'deactivated') {
     body = [h('h1', null, 'Your account is deactivated'), h('p', { class: 'muted' }, 'Your groups and identities are hidden while it’s deactivated. Reactivate whenever you’re ready — nothing was lost.'),
       h('div', { class: 'row wrap' }, h('button', { class: 'btn primary', onclick: (e) => withBusy(e.currentTarget, async () => { await rpc('reactivate_account'); await refreshAccount(); toast('Welcome back!', 'success'); navigate('/home'); }) }, 'Reactivate account'), out)];

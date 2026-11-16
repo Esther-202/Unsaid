@@ -1,3 +1,4 @@
+import { captchaBox } from '../captcha.js';
 // Settings: account & security, notification preferences, privacy & safety.
 import { sb, rpc } from '../supabase.js';
 import { store, refreshAccount, signOut } from '../store.js';
@@ -53,6 +54,7 @@ export async function account() {
   const n1 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', id: 'n1' });
   const n2 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', id: 'n2' });
   const err = h('div', { class: 'error-text', role: 'alert' });
+  const pcap = captchaBox();
   const changeBtn = h('button', { class: 'btn primary', type: 'submit' }, 'Change password');
   const pwForm = h('form', { novalidate: true, onsubmit: async (e) => {
     e.preventDefault(); err.textContent = '';
@@ -60,7 +62,8 @@ export async function account() {
     const p = pwProblem(n1.value); if (p) { err.textContent = p; return; }
     if (n1.value !== n2.value) { err.textContent = 'New passwords don’t match.'; return; }
     await withBusy(changeBtn, async () => {
-      const re = await sb.auth.signInWithPassword({ email, password: cur.value });
+      let captchaToken; try { captchaToken = await pcap.token(); } catch (er) { err.textContent = errMsg(er); return; }
+      const re = await sb.auth.signInWithPassword({ email, password: cur.value, options: { captchaToken } }); pcap.reset();
       if (re.error) { err.textContent = 'Your current password is incorrect.'; return; }
       const { error } = await sb.auth.updateUser({ password: n1.value });
       if (error) { err.textContent = errMsg(error); return; }
@@ -68,7 +71,7 @@ export async function account() {
     });
   } },
     h('div', { class: 'field' }, h('label', { for: 'cur' }, 'Current password'), cur), h('div', { class: 'field' }, h('label', { for: 'n1' }, 'New password'), n1, h('div', { class: 'hint' }, 'At least 8 characters with letters and numbers.')),
-    h('div', { class: 'field' }, h('label', { for: 'n2' }, 'Confirm new password'), n2), err, h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, changeBtn));
+    h('div', { class: 'field' }, h('label', { for: 'n2' }, 'Confirm new password'), n2), pcap.el, err, h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, changeBtn));
 
   async function deactivate() {
     if (!await confirmDialog({ title: 'Deactivate your account?', message: 'Your groups, messages and names are hidden until you sign back in and reactivate. Nothing is deleted.', confirmText: 'Deactivate', danger: true })) return;
