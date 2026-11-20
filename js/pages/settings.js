@@ -5,6 +5,9 @@ import { store, refreshAccount, signOut } from '../store.js';
 import { h, icon, setTitle, toast, toastError, withBusy, confirmDialog, modal, empty, errorState, skeletons, ago, errMsg } from '../ui.js';
 import { navigate } from '../router.js';
 import { clientKey } from '../clientkey.js';
+import { S as keyS, initKeys, deleteBackup } from '../keys.js';
+import { pushStatus, enablePush, disablePush, isIOS } from '../push.js';
+import { openBackupSetup, openRestore } from '../views/keyui.js';
 
 const tabs = (active) => h('nav', { class: 'tabs', 'aria-label': 'Settings sections' }, [['/settings', 'Account'], ['/settings/notifications', 'Notifications'], ['/settings/privacy', 'Privacy & safety']].map(([p, l]) =>
   h('a', { class: 'tab' + (p === active ? ' active' : ''), href: '#' + p, 'aria-current': p === active ? 'page' : null }, l)));
@@ -32,6 +35,43 @@ function devicesCard() {
   load();
   return h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Where you’re signed in')), box,
     h('div', { class: 'row', style: { justifyContent: 'space-between', marginTop: '10px' } }, h('p', { class: 'hint', style: { margin: 0 } }, 'Using a phone and a laptop is normal. If you don’t recognise a device, sign it out and change your password.'), all));
+}
+
+// ── private chat keys & backup ────────────────────────────────
+function keysCard() {
+  const box = h('div', { class: 'stack', style: { gap: '4px' } }, skeletons(1, 48));
+  const row = (title, hint, ...btns) => h('div', { class: 'setting' }, h('div', null, h('div', { style: { fontWeight: 600 } }, title), h('div', { class: 'hint' }, hint)), h('div', { class: 'row', style: { gap: '6px' } }, ...btns));
+  function paint() {
+    const kind = keyS.backupKind === 'recovery' ? 'recovery code' : 'passphrase';
+    box.replaceChildren(
+      row('Keys on this device', keyS.status === 'ready' ? 'Ready. Private chats are end-to-end encrypted.' : keyS.status === 'need-restore' ? 'This device doesn’t have your keys yet. Restore them to open older private messages.'
+        : keyS.status === 'unavailable' ? 'This browser can’t store keys (private/incognito mode?). Private chats won’t work here.' : 'Checking…',
+        keyS.status === 'need-restore' ? h('button', { class: 'btn sm primary', onclick: () => openRestore(() => { paint(); }) }, 'Restore') : null),
+      keyS.status === 'ready' ? row('Backup', keyS.hasBackup ? 'On · protected by your ' + kind + '. Use it to restore your chats on a new phone or computer.' : 'Not set up. If you lose this device, older private messages and voice notes can’t be recovered.',
+        h('button', { class: 'btn sm' + (keyS.hasBackup ? '' : ' primary'), onclick: () => openBackupSetup(paint) }, keyS.hasBackup ? 'Change' : 'Set up'),
+        keyS.hasBackup ? h('button', { class: 'btn sm', onclick: async () => { if (!await confirmDialog({ title: 'Delete your key backup?', message: 'You won’t be able to restore your older private chats on a new device unless you set up a new backup.', confirmText: 'Delete backup', danger: true })) return; try { await deleteBackup(); paint(); toast('Backup deleted', 'success', 1800); } catch (e) { toastError(e); } } }, 'Delete') : null) : null,
+      h('p', { class: 'hint', style: { margin: '6px 0 0' } }, 'Your keys are made and kept on your device. UNSAID can’t read your private chats or your backup, and can’t reset a lost passphrase or code.'));
+  }
+  initKeys(store.session?.user?.id).then(paint, paint);
+  return h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Private chat keys & backup')), box);
+}
+
+// ── push notifications on this device ─────────────────────────
+function pushCard() {
+  const box = h('div', { class: 'stack', style: { gap: '4px' } }, skeletons(1, 48));
+  const row = (title, hint, ...btns) => h('div', { class: 'setting' }, h('div', null, h('div', { style: { fontWeight: 600 } }, title), h('div', { class: 'hint' }, hint)), h('div', { class: 'row', style: { gap: '6px' } }, ...btns));
+  async function paint() {
+    const st = await pushStatus().catch(() => 'unsupported');
+    const toggle = (on) => h('button', { class: 'btn sm' + (on ? '' : ' primary'), onclick: (e) => withBusy(e.currentTarget, async () => { if (on) await disablePush(); else await enablePush(); toast(on ? 'Notifications turned off on this device' : 'Notifications are on', 'success', 2200); await paint(); }) }, on ? 'Turn off' : 'Turn on');
+    box.replaceChildren(
+      st === 'needs-install' ? row('Notifications when the app is closed', 'On iPhone, first add UNSAID to your Home Screen: open this site in Safari, tap the Share button, then “Add to Home Screen”. Open UNSAID from that icon and come back here to turn notifications on. (Needs iOS 16.4 or newer.)')
+      : st === 'unsupported' ? row('Notifications when the app is closed', 'This browser can’t receive push notifications.')
+      : st === 'denied' ? row('Notifications when the app is closed', 'Notifications are blocked for UNSAID. Allow them in your ' + (isIOS ? 'iPhone Settings → Notifications → UNSAID' : 'browser’s site settings') + ', then come back here.')
+      : row('Notifications when the app is closed', st === 'on' ? 'On for this device.' : 'Get a heads-up on this device when something new arrives.', toggle(st === 'on')),
+      h('p', { class: 'hint', style: { margin: '6px 0 0' } }, 'Notifications never show message text, names or group names, only things like “New private message”, because they pass through Apple’s or Google’s servers. You can still mute chats and groups as usual.'));
+  }
+  paint();
+  return h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Notifications')), box);
 }
 
 // ── change email (the new address must be verified before it takes effect) ──
@@ -91,6 +131,8 @@ export async function account() {
       h('div', { class: 'setting' }, h('div', null, h('div', { class: 'small muted' }, 'Email (private — never shown to anyone)'), h('div', null, email)), h('div', { class: 'row' }, h('span', { class: 'tag ok' }, 'Verified'), h('button', { class: 'btn sm', onclick: () => changeEmail(email) }, 'Change'))),
       h('div', { class: 'setting' }, h('div', null, h('div', { class: 'small muted' }, 'Your general username'), h('div', { class: 'mono', style: { fontWeight: 650 } }, store.account.username)), h('a', { class: 'btn sm', href: '#/profile' }, 'Edit profile'))),
     h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Change password')), pwForm),
+    pushCard(),
+    keysCard(),
     devicesCard(),
     h('div', { class: 'card', style: { marginTop: '16px' } }, h('div', { class: 'card-title' }, h('b', null, 'Session')),
       h('div', { class: 'setting' }, h('div', null, 'Sign out on this device'), h('button', { class: 'btn', onclick: signOut }, icon('logout', 18), 'Sign out')),),

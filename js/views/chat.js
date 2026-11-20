@@ -11,11 +11,13 @@ function linkify(text) {
 }
 
 export function createChat(opts) {
-  const { kind, id, adapter, header, canPost = true, lockedText, lockedAction, caps = {}, onProfile, onReport, onBlock, focusId, noImages = false, maxLen = 4000, placeholder } = opts;
+  const { kind, id, adapter, header, canPost = true, lockedText, lockedAction, caps = {}, onProfile, onReport, onBlock, focusId, noImages = false, maxLen = 4000, placeholder, voice = null } = opts;
   const isGroup = kind === 'group';
   let msgs = [];                    // ordered ascending
   let replyTo = null, attach = null, announceMode = false, hasMore = true, loadingOlder = false, destroyed = false, searchMode = false;
   let pinned = [], pinIdx = 0;
+  let rec = null, recording = false, uploading = false, timerEl = null;   // voice note recording state
+  const audios = new Map();                                                  // message id → { audio } so playback survives re-renders
   const sender = (m) => m.identity_id || m.alias_id;
 
   // ── skeleton ────────────────────────────────────────────────
@@ -117,14 +119,43 @@ export function createChat(opts) {
     if (m.kind === 'announcement') k.push(h('div', { class: 'tagline' }, icon('megaphone', 14), 'Announcement'));
     else if (m.pinned) k.push(h('div', { class: 'tagline' }, icon('pin', 13), 'Pinned'));
     if (m.reply) k.push(h('div', { class: 'quote', onclick: (e) => { e.stopPropagation(); focusMessage(m.reply.id); } }, h('b', null, m.reply.username),
-      h('span', null, m.reply.deleted ? 'Message deleted' : (m.reply.body || (m.reply.has_image ? '📷 Photo' : '')))));
+      h('span', null, m.reply.deleted ? 'Message deleted' : (m.reply.body || (m.reply.has_voice ? '🎤 Voice message' : m.reply.has_image ? '📷 Photo' : '')))));
     if (m.poll) k.push(pollView(m));
     if (m.image_path) k.push(h('img', { class: 'photo', alt: 'Shared photo', dataset: { path: m.image_path }, onclick: (e) => { e.stopPropagation(); if (e.target.src) lightbox(e.target.src); } }));
+    if (m.voice_path) k.push(voicePlayer(m));
     if (m.body && !m.poll) k.push(h('div', null, linkify(m.body)));
     k.push(h('div', { class: 'meta-line' }, m.edited_at ? h('span', null, 'edited') : null, h('span', null, clock(m.created_at))));
     return h('div', { class: 'bubble' + (m.kind === 'announcement' ? ' announce' : ''), tabindex: 0, role: 'button', 'aria-label': 'Message actions',
       onclick: (e) => { if (e.target.closest('a,.opt,.quote')) return; if (getSelection()?.toString()) return; openActions(m); },
       onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) openActions(m); } }, k);
+  }
+
+  const fmt = (ms) => { const t = Math.max(0, Math.round(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  function voicePlayer(m) {
+    const btn = h('button', { class: 'vp-btn', type: 'button', 'aria-label': 'Play voice note' }, icon('play', 18));
+    const fill = h('span'); const bar = h('div', { class: 'vp-bar' }, fill); const time = h('span', { class: 'vp-time' }, '🎤 Voice note');
+    const box = h('div', { class: 'vp', onclick: (e) => e.stopPropagation() }, btn, h('div', { class: 'vp-main' }, bar, time));
+    const bind = (a, total) => {
+      const paint = () => { fill.style.width = (a.duration && isFinite(a.duration) ? Math.min(100, a.currentTime / a.duration * 100) : (total ? a.currentTime * 1000 / total * 100 : 0)) + '%';
+        time.textContent = fmt(a.paused && !a.currentTime ? total : a.currentTime * 1000) + (a.paused && !a.currentTime ? '' : ' / ' + fmt(total)); btn.replaceChildren(icon(a.paused ? 'play' : 'pause', 18)); btn.setAttribute('aria-label', a.paused ? 'Play voice note' : 'Pause voice note'); };
+      a.ontimeupdate = paint; a.onplay = paint; a.onpause = paint; a.onended = () => { a.currentTime = 0; paint(); }; paint();
+    };
+    const have = audios.get(m.id); if (have) bind(have.audio, have.total);
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        let h0 = audios.get(m.id);
+        if (!h0) {
+          btn.disabled = true; time.textContent = 'Opening…';
+          const v = await voice?.load(m);
+          if (!v) { time.textContent = '🔒 Can’t be opened on this device'; return; }
+          h0 = { audio: new Audio(v.url), total: v.ms }; audios.set(m.id, h0); bind(h0.audio, v.ms);
+        }
+        const a = h0.audio;
+        if (a.paused) { audios.forEach((x) => { if (x.audio !== a) x.audio.pause(); }); await a.play(); } else a.pause();
+      } catch (er) { time.textContent = '🎤 Voice note'; toastError(er); } finally { btn.disabled = false; }
+    };
+    return box;
   }
 
   function pollView(m) {
@@ -218,12 +249,52 @@ export function createChat(opts) {
       renderComposer(); touch(mid); setTimeout(() => { list.scrollTop = list.scrollHeight; }, 250);
     } catch (e) { toastError(e); sendBtn.disabled = false; }
   }
+  // ── voice notes ──
+  async function startRec() {
+    let warned = false; try { warned = localStorage.getItem('unsaid.voicewarn') === '1'; } catch { /* ignore */ }
+    if (!warned) {
+      if (!await confirmDialog({ title: 'Before you record', message: 'Voice notes are encrypted on your device before they’re uploaded, but your voice can reveal who you are. Only send them to people you trust. Your browser will ask to use the microphone.', confirmText: 'Start recording' })) return;
+      try { localStorage.setItem('unsaid.voicewarn', '1'); } catch { /* ignore */ }
+    }
+    try {
+      rec = await voice.record({ onTick: (ms) => { if (timerEl) timerEl.textContent = fmt(ms) + ' / 1:00'; }, onLimit: () => finishRec(true) });
+      recording = true; renderComposer();
+    } catch (e) { rec = null; toast(/denied|permission|NotAllowed/i.test(e?.name + ' ' + e?.message) ? 'Microphone access was blocked. Allow it in your browser’s site settings to send voice notes.' : 'Couldn’t start the microphone.', 'error', 6000); }
+  }
+  async function finishRec(send) {
+    const r = rec; if (!r) return; rec = null; recording = false;
+    if (!send) { await r.cancel().catch(() => {}); renderComposer(); return; }
+    uploading = true; renderComposer();
+    try {
+      const data = await r.stop();
+      if (!data) { uploading = false; renderComposer(); toast('That was too short. Hold on a little longer.', 'info'); return; }
+      const mid = await voice.send(data, replyTo?.id || null);
+      replyTo = null; uploading = false; renderComposer(); touch(mid); setTimeout(() => { list.scrollTop = list.scrollHeight; }, 250);
+    } catch (e) { uploading = false; renderComposer(); toastError(e); }
+  }
+  function micClick() {
+    if (!voice.supported) { toast('Your browser can’t record audio here.', 'info'); return; }
+    const st = voice.state();
+    if (st === 'on') startRec();
+    else if (st === 'requested') toast(voice.byMe() ? 'Waiting for ' + voice.other + ' to accept your voice note request.' : 'Accept or decline the request above first.', 'info', 3500);
+    else voice.request();
+  }
   function renderComposer() {
     const keep = ta ? ta.value : pendingDraft;
     pendingDraft = '';
     clear(composerWrap);
-    if (!canPost) { composerWrap.append(h('div', { class: 'locked-note', style: { margin: '-8px -10px' } }, lockedText || 'You can’t post here.', lockedAction ? h('div', { style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: lockedAction.onClick }, lockedAction.label)) : null)); return; }
-    if (replyTo) composerWrap.append(h('div', { class: 'replying' }, icon('reply', 16), h('div', { class: 'grow truncate' }, h('b', null, replyTo.username), ' ' + (replyTo.body || '📷 Photo')),
+    if (!canPost) { composerWrap.append(h('div', { class: 'locked-note', style: { margin: '-8px -10px' } }, lockedText || 'You can’t post here.', lockedAction ? h('div', { class: 'row', style: { marginTop: '8px', justifyContent: 'center', flexWrap: 'wrap', gap: '8px' } }, [].concat(lockedAction).map((a) => h('button', { class: 'btn sm', onclick: a.onClick }, a.label))) : null)); return; }
+    if (recording || uploading) {
+      timerEl = h('span', { class: 'mono' }, '0:00 / 1:00');
+      composerWrap.append(h('div', { class: 'recbar' }, uploading ? h('span', { class: 'spin' }) : h('span', { class: 'recdot' }),
+        h('div', { class: 'grow' }, uploading ? 'Encrypting and sending…' : ['Recording ', timerEl]),
+        uploading ? null : h('button', { class: 'iconbtn', 'aria-label': 'Discard recording', onclick: () => finishRec(false) }, icon('trash', 20)),
+        uploading ? null : h('button', { class: 'sendbtn', 'aria-label': 'Send voice note', onclick: () => finishRec(true) }, icon('send', 19))));
+      return;
+    }
+    if (voice && voice.state() === 'requested' && !voice.byMe()) composerWrap.append(h('div', { class: 'voicereq' }, h('div', { class: 'grow' }, '🎤 ', h('b', { class: 'mono' }, voice.other), ' would like to send voice notes in this chat.'),
+      h('button', { class: 'btn sm', onclick: () => voice.respond(false) }, 'Decline'), h('button', { class: 'btn sm primary', onclick: () => voice.respond(true) }, 'Accept')));
+    if (replyTo) composerWrap.append(h('div', { class: 'replying' }, icon('reply', 16), h('div', { class: 'grow truncate' }, h('b', null, replyTo.username), ' ' + (replyTo.body || (replyTo.voice_path ? '🎤 Voice message' : '📷 Photo'))),
       h('button', { class: 'iconbtn', 'aria-label': 'Cancel reply', onclick: () => { replyTo = null; renderComposer(); } }, icon('x', 16))));
     if (announceMode) composerWrap.append(h('div', { class: 'replying' }, icon('megaphone', 16), h('div', { class: 'grow' }, 'Posting as an announcement to everyone'),
       h('button', { class: 'iconbtn', 'aria-label': 'Cancel announcement', onclick: () => { announceMode = false; renderComposer(); } }, icon('x', 16))));
@@ -241,6 +312,7 @@ export function createChat(opts) {
       caps.announce ? { label: 'Post an announcement', icon: 'megaphone', onClick: () => { announceMode = true; replyTo = null; renderComposer(); $('textarea', composerWrap)?.focus(); } } : null]) }, icon('plus', 22)));
     composerWrap.append(emojiBox, h('div', { class: 'composer' }, ...extras,
       noImages ? null : h('button', { class: 'iconbtn', 'aria-label': 'Add photo', onclick: pickImage }, icon('image', 22)),
+      voice ? h('button', { class: 'iconbtn', 'aria-label': voice.state() === 'on' ? 'Record a voice note' : 'Voice notes', onclick: micClick }, icon('mic', 22)) : null,
       h('button', { class: 'iconbtn', 'aria-label': 'Emoji', onclick: () => emojiBox.classList.toggle('hidden') }, icon('smile', 22)), ta, sendBtn));
     if (keep) ta.dispatchEvent(new Event('input'));
   }
@@ -253,7 +325,7 @@ export function createChat(opts) {
   const vis = () => { if (!document.hidden) reconcile(); };
   document.addEventListener('visibilitychange', vis);
   return {
-    el, openSearch, focusMessage, reload: loadInitial, isLive: () => live,
-    destroy() { destroyed = true; clearInterval(poll); document.removeEventListener('visibilitychange', vis); stopWatch?.(); },
+    el, openSearch, focusMessage, reload: loadInitial, isLive: () => live, isRecording: () => recording || uploading,
+    destroy() { destroyed = true; if (rec) { rec.cancel().catch(() => {}); rec = null; } audios.forEach((x) => x.audio.pause()); clearInterval(poll); document.removeEventListener('visibilitychange', vis); stopWatch?.(); },
   };
 }

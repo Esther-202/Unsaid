@@ -14,6 +14,7 @@ const notFound = () => { document.title = 'Not found'; app.replaceChildren(h('di
 
 import { captchaBox } from './captcha.js';
 import { isE2E, importKeyB64, decryptText } from './e2ee.js';
+import { loadVoice } from './voice.js';
 // ── sign-in (admins sign in here; nothing reveals whether this page is an admin area) ──
 function login() {
   document.title = 'Sign in';
@@ -99,17 +100,24 @@ function snapshotView(r) {
   const sn = r.snapshot || {}; const out = [];
   if (sn.group) out.push(kv([['Group', sn.group.name], ['Description', sn.group.description], ['Rules', sn.group.rules], ['Privacy', sn.group.privacy]]));
   if (sn.username && !sn.message) out.push(kv([['Reported name', sn.username], ['Bio', sn.bio]]));
-  const line = (l, hit) => h('div', { class: hit ? 'hit' : '' }, h('b', { class: 'mono' }, l.username), ' ', isE2E(l.body) ? h('span', { class: 'e2e-line', dataset: { ct: l.body, alias: l.alias_id || '' } }, '🔒 (encrypted)') : (l.body || ''), l.image_path ? h('img', { class: 'photo', dataset: { path: l.image_path }, alt: 'Reported image', style: { display: 'block', maxWidth: '240px', borderRadius: '8px', marginTop: '4px' } }) : null, h('span', { class: 'faint small' }, '  ' + dateTime(l.at)));
+  const line = (l, hit) => h('div', { class: hit ? 'hit' : '' }, h('b', { class: 'mono' }, l.username), ' ', isE2E(l.body) ? h('span', { class: 'e2e-line', dataset: { ct: l.body, alias: l.alias_id || '' } }, '🔒 (encrypted)') : (l.body || ''), l.voice_path ? h('span', { class: 'voice-line', dataset: { path: l.voice_path, alias: l.alias_id || '' } }, '🎤 (encrypted voice note)') : null, l.image_path ? h('img', { class: 'photo', dataset: { path: l.image_path }, alt: 'Reported image', style: { display: 'block', maxWidth: '240px', borderRadius: '8px', marginTop: '4px' } }) : null, h('span', { class: 'faint small' }, '  ' + dateTime(l.at)));
   if (sn.context?.length) out.push(h('div', null, h('div', { class: 'label', style: { marginBottom: '6px' } }, sn.message ? 'Reported message and the 12 messages before it' : 'Recent conversation (shared by the reporter)'),
     h('div', { class: 'ctx' }, sn.context.map((l) => line(l, sn.message && l.at === sn.message.at && l.username === sn.message.username)))));
   const wrap = h('div', { class: 'stack' }, out.length ? out : [h('p', { class: 'muted' }, 'No content snapshot.')]);
   setTimeout(async () => {
-    const encs = [...wrap.querySelectorAll('.e2e-line')]; if (!encs.length) return;
+    const encs = [...wrap.querySelectorAll('.e2e-line')]; const voices = [...wrap.querySelectorAll('.voice-line')]; if (!encs.length && !voices.length) return;
     let key = null; try { if (sn.e2e_key) key = await importKeyB64(sn.e2e_key); } catch { key = null; }
     for (const n of encs) {
       const t = key ? await decryptText(key, sn.conversation_id || r.conversation_id, n.dataset.alias, n.dataset.ct) : null;
       n.textContent = t ?? '🔒 Could not be opened (the reporter’s key was not attached or does not match)';
       if (t == null) n.style.opacity = '.6';
+    }
+    for (const n of voices) {
+      try {
+        const v = key ? await loadVoice(n.dataset.path, key, sn.conversation_id || r.conversation_id, n.dataset.alias) : null;
+        if (!v) { n.textContent = '🎤 Voice note could not be opened (the reporter’s key was not attached or does not match)'; n.style.opacity = '.6'; continue; }
+        n.replaceChildren('🎤 ', h('audio', { controls: true, src: v.url, preload: 'none', style: { verticalAlign: 'middle', height: '34px' } }));
+      } catch { n.textContent = '🎤 Voice note could not be downloaded'; n.style.opacity = '.6'; }
     }
     if (key) wrap.prepend(h('p', { class: 'hint' }, '🔒 Private chat: these messages were encrypted. They were opened here, in your browser, with the key the reporter attached. The text comes from the stored messages, so it cannot be edited by the reporter.'));
   }, 0);

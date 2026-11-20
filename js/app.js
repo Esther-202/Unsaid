@@ -18,6 +18,18 @@ const { store, initStore, subscribe, refreshAccount, refreshCounts, isActive, si
 const { route, setMount, setGuard, navigate, start, resolve, parseHash } = await import('./router.js');
 const { startNotificationWatcher, stopNotificationWatcher } = await import('./realtime.js');
 const { startSessionWatch, stopSessionWatch } = await import('./session.js');
+const { initKeys, resetKeyState, S: keyS } = await import('./keys.js');
+
+// End-to-end encryption keys: made on first launch, topped up, restored from backup on a new device (see js/keys.js).
+let keyPrompted = false;
+async function bootKeys() {
+  if (!store.session || !isActive()) return;
+  const uid = store.session.user.id;
+  if (keyS.uid === uid && keyS.status !== 'idle') return;
+  await initKeys(uid);
+  if (keyS.status === 'need-restore' && !keyPrompted) { keyPrompted = true; const m = await import('./views/keyui.js'); m.openRestore(() => navigate(location.hash.slice(1) || '/home', { replace: true })); }
+}
+subscribe((evt) => { if (evt === 'signedin' || evt === 'account') { bootKeys().catch(() => {}); import('./push.js').then((m) => m.refreshPushRegistration()).catch(() => {}); } if (evt === 'signedout') { resetKeyState(); keyPrompted = false; } });
 
 // ── routes ───────────────────────────────────────────────────
 const lazy = (file, fn = 'default') => (ctx) => import(file).then((m) => m[fn](ctx));
@@ -154,4 +166,5 @@ if (recoveryFlow && !store.session && hadCode && !authError) { history.replaceSt
 else if (recoveryFlow && store.session) history.replaceState(null, '', '#/reset');
 else if (store.session && (!location.hash || location.hash === '#/')) history.replaceState(null, '', isActive() ? '#/home' : '#/account');
 await start();
+bootKeys().catch(() => {});
 window.addEventListener('focus', () => { if (store.session) { refreshCounts(); } });

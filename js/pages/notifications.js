@@ -4,7 +4,7 @@ import { subscribe, refreshCounts } from '../store.js';
 import { h, icon, empty, errorState, skeletons, setTitle, ago, toastError, withBusy, toast } from '../ui.js';
 import { navigate } from '../router.js';
 
-const ICON = { group_message: 'chat', reply: 'reply', reaction: 'smile', invite: 'mail', membership: 'check', join_request: 'users', dm_request: 'inbox', dm_accept: 'chat',
+const ICON = { group_message: 'chat', reply: 'reply', reaction: 'smile', invite: 'mail', membership: 'check', join_request: 'users', dm_request: 'inbox', dm_accept: 'chat', dm_voice: 'mic', dm_key_change: 'shield',
   dm_message: 'chat', announcement: 'megaphone', moderation: 'shield', report_update: 'flag' };
 
 export default async function notifications() {
