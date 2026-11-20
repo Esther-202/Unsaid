@@ -8,6 +8,8 @@ Anonymous communities + private chats. Plain HTML/CSS/JavaScript (no build step)
 2. **Create the database**: Dashboard → SQL Editor → paste `supabase/unsaid_all_in_one.sql` → Run.
    - Or run separately, in order: `01_schema` → `02_core_functions` → `03_messaging_functions` → `04_moderation_functions` → `05_security` → `07_upgrade`.
    - **Already have 01–05 installed?** Run `07a_limits.sql`, then `07b_usernames_suggestions.sql`, then `07c_security.sql` (small files, safe to repeat; `07_upgrade.sql` is the same three in one file). It adds the limits, the new usernames, the suggestion box and the security features, and keeps all existing data.
+   - **Cleaner Alerts.** Run `09_alerts.sql` once (safe to repeat, independent of 08). Messages, replies and reactions now roll up into one card per chat or group with a count ("5 new messages"), and opening the chat clears its card.
+   - **Private chats are end-to-end encrypted.** After 07c, run `08_e2ee.sql` once (safe to repeat). Messages are locked in the browser; the server only stores scrambled text. Photos are not available in private chats. Each chat's key lives on the device where it was opened: a new browser or cleared data means older messages in that chat can't be opened (use "Start fresh"). The security code in the chat menu lets two people check nobody swapped keys.
    - Re-run `05_security.sql` any time you change a function or table.
 3. **Auth settings** (Dashboard → Authentication):
    - Providers → Email: enable, keep **Confirm email** ON.

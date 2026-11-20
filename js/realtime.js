@@ -35,7 +35,7 @@ export function startNotificationWatcher() {
   stopNotif = channel(`notif-${uid}`, [['notifications', 'INSERT', `account_id=eq.${uid}`, (p) => {
     refreshCounts(); emit('notification', p.new);
     if (!/^#\/(g|messages)\//.test(location.hash) || !location.hash.includes(p.new.link?.split('/')[2] || '§')) toast(`${p.new.title}${p.new.body ? ' — ' + p.new.body : ''}`, 'info', 4500);
-  }], ['notifications', 'UPDATE', `account_id=eq.${uid}`, () => refreshCounts()]]);
+  }], ['notifications', 'UPDATE', `account_id=eq.${uid}`, (p) => { refreshCounts(); emit('notification', p.new); }]]);   // counts change by UPDATE ("5 new messages") and chats clear by UPDATE
   pollTimer = setInterval(() => { if (!document.hidden) refreshCounts(); }, 30000);
 }
 export function stopNotificationWatcher() { stopNotif?.(); stopNotif = null; clearInterval(pollTimer); pollTimer = null; }

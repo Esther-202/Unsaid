@@ -14,14 +14,14 @@ export function openReport(target) {
   const m = modal({ title: 'Report', body: h('div', null,
     h('p', { class: 'muted small' }, target.label ? `You’re reporting: ${target.label}` : ''),
     h('div', { class: 'stack', style: { gap: '8px', marginBottom: '14px' } }, choices), h('div', { class: 'field' }, h('label', null, 'Details'), details), err,
-    h('p', { class: 'hint' }, target.conversation ? 'Reporting shares the recent messages of this conversation with UNSAID moderators so they can review it. Nothing else about you is shared with the other person.' : 'Your report is private. The other person is never told who reported them.')),
+    h('p', { class: 'hint' }, target.conversation ? 'Reporting shares the recent messages of this conversation with UNSAID moderators (this chat is end-to-end encrypted, so your app also gives them the key to open it). Nothing else about you is shared with the other person.' : 'Your report is private. The other person is never told who reported them.')),
     actions: [h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Cancel'),
       h('button', { class: 'btn danger', onclick: async (e) => {
         if (!cat) { err.textContent = 'Please choose a reason.'; return; }
         e.target.disabled = true;
         try {
           await rpc('submit_report', { p_target_type: target.type, p_group: target.group || null, p_message: target.message || null,
-            p_conversation: target.conversation || null, p_identity: target.identity || null, p_category: cat, p_details: details.value || null });
+            p_conversation: target.conversation || null, p_identity: target.identity || null, p_category: cat, p_details: details.value || null, p_evidence_key: target.evidenceKey || null });
           m.close(); toast('Report sent. Thank you for helping keep UNSAID safe.', 'success');
         } catch (er) { toastError(er); e.target.disabled = false; }
       } }, 'Send report')] });

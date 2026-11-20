@@ -12,6 +12,22 @@ export default async function notifications() {
   const box = h('div', { class: 'list' }, skeletons(5, 64));
   const markAll = h('button', { class: 'btn sm' }, icon('check', 16), 'Mark all read');
   let dead = false, items = [];
+  const GROUPED = ['dm_message', 'group_message', 'reply', 'reaction'];
+  // One card per chat/group: hide cleared ones and merge any duplicates (belt and braces — the database already merges)
+  function tidy(rows) {
+    const seen = new Map(), out = [];
+    for (const n of rows) {
+      if (n.data?.cleared) continue;
+      if (GROUPED.includes(n.type) && n.data?.key && !n.read) {
+        const k = n.type + ':' + n.data.key, first = seen.get(k);
+        if (first) { first.data = { ...first.data, count: (first.data.count || 1) + (n.data.count || 1) }; first.body = countText(first); continue; }
+        seen.set(k, n);
+      }
+      out.push(n);
+    }
+    return out;
+  }
+  const countText = (n) => { const c = n.data?.count || 1; return c + (n.type === 'reply' ? (c === 1 ? ' new reply' : ' new replies') : n.type === 'reaction' ? (c === 1 ? ' new reaction' : ' new reactions') : (c === 1 ? ' new message' : ' new messages')); };
 
   async function open(n) {
     try { if (!n.read) { await rpc('mark_notifications_read', { p_ids: [n.id] }); n.read = true; refreshCounts(); } } catch { /* non-fatal */ }
@@ -23,12 +39,13 @@ export default async function notifications() {
     box.replaceChildren(...(items.length ? items.map((n) => h('div', { class: 'item' + (n.read ? '' : ' unread'), style: { alignItems: 'flex-start' } },
       h('button', { class: 'item', style: { flex: 1, padding: 0, background: 'none', alignItems: 'flex-start', minWidth: 0 }, onclick: () => open(n), 'aria-label': `${n.title}. ${n.body || ''}` },
         h('span', { class: 'ico', style: { display: 'grid', placeItems: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'var(--surface-3)', color: 'var(--accent)', flex: 'none' } }, icon(ICON[n.type] || 'bell', 18)),
-        h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'title' }, n.title), n.body ? h('div', { class: 'sub' }, n.body) : null, h('div', { class: 'time' }, ago(n.created_at)))),
+        h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'title' }, n.title), n.body ? h('div', { class: 'sub' }, n.body) : null, h('div', { class: 'time' }, ago(n.created_at))),
+        (GROUPED.includes(n.type) && !n.read && (n.data?.count || 1) > 0) ? h('span', { class: 'badge', style: { alignSelf: 'center', flex: 'none' }, 'aria-hidden': 'true' }, String(Math.min(n.data?.count || 1, 99)) + ((n.data?.count || 1) > 99 ? '+' : '')) : null),
       h('button', { class: 'iconbtn', 'aria-label': 'Dismiss notification', onclick: async () => { try { await deleteNotification(n.id); items = items.filter((x) => x.id !== n.id); refreshCounts(); paint(); } catch (e) { toastError(e); } } }, icon('x', 16))))
       : [empty('bell', 'You’re all caught up', 'Replies, invitations, chat requests and updates will show up here.')]));
   }
   async function load() {
-    try { items = await listNotifications(80); if (!dead) paint(); } catch (e) { if (!dead) box.replaceChildren(errorState(e, load)); }
+    try { items = tidy(await listNotifications(80)); if (!dead) paint(); } catch (e) { if (!dead) box.replaceChildren(errorState(e, load)); }
   }
   markAll.onclick = () => withBusy(markAll, async () => { await rpc('mark_notifications_read', { p_ids: null }); items.forEach((n) => { n.read = true; }); refreshCounts(); paint(); toast('All caught up', 'success', 1500); });
   const unsub = subscribe((evt) => { if (evt === 'notification') load(); });

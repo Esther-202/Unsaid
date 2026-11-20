@@ -139,6 +139,7 @@ const hashParams = new URLSearchParams((location.hash.split('?')[1] || '') || lo
 const authError = url.searchParams.get('error_description') || hashParams.get('error_description');
 const authErrorCode = url.searchParams.get('error_code') || hashParams.get('error_code') || '';
 const recoveryFlow = url.searchParams.get('flow') === 'recovery';
+const hadCode = url.searchParams.has('code');
 await initStore();
 if (url.searchParams.has('code') || url.searchParams.has('flow') || url.searchParams.has('error_description')) {
   ['code', 'flow', 'error', 'error_code', 'error_description'].forEach((k) => url.searchParams.delete(k));
@@ -149,7 +150,8 @@ if (authError) {
   else toast(authError.replace(/\+/g, ' '), 'error', 7000);
 }
 if (store.session) { startNotificationWatcher(); startSessionWatch(); }
-if (recoveryFlow && store.session) history.replaceState(null, '', '#/reset');
+if (recoveryFlow && !store.session && hadCode && !authError) { history.replaceState(null, '', '#/forgot'); toast('Open the reset link in the same browser where you asked for it (same phone or computer, not a different one). Or request a new link here.', 'info', 9000); }
+else if (recoveryFlow && store.session) history.replaceState(null, '', '#/reset');
 else if (store.session && (!location.hash || location.hash === '#/')) history.replaceState(null, '', isActive() ? '#/home' : '#/account');
 await start();
 window.addEventListener('focus', () => { if (store.session) { refreshCounts(); } });

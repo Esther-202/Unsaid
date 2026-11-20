@@ -11,7 +11,7 @@ function linkify(text) {
 }
 
 export function createChat(opts) {
-  const { kind, id, adapter, header, canPost = true, lockedText, caps = {}, onProfile, onReport, onBlock, focusId } = opts;
+  const { kind, id, adapter, header, canPost = true, lockedText, lockedAction, caps = {}, onProfile, onReport, onBlock, focusId, noImages = false, maxLen = 4000, placeholder } = opts;
   const isGroup = kind === 'group';
   let msgs = [];                    // ordered ascending
   let replyTo = null, attach = null, announceMode = false, hasMore = true, loadingOlder = false, destroyed = false, searchMode = false;
@@ -222,7 +222,7 @@ export function createChat(opts) {
     const keep = ta ? ta.value : pendingDraft;
     pendingDraft = '';
     clear(composerWrap);
-    if (!canPost) { composerWrap.append(h('div', { class: 'locked-note', style: { margin: '-8px -10px' } }, lockedText || 'You can’t post here.')); return; }
+    if (!canPost) { composerWrap.append(h('div', { class: 'locked-note', style: { margin: '-8px -10px' } }, lockedText || 'You can’t post here.', lockedAction ? h('div', { style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: lockedAction.onClick }, lockedAction.label)) : null)); return; }
     if (replyTo) composerWrap.append(h('div', { class: 'replying' }, icon('reply', 16), h('div', { class: 'grow truncate' }, h('b', null, replyTo.username), ' ' + (replyTo.body || '📷 Photo')),
       h('button', { class: 'iconbtn', 'aria-label': 'Cancel reply', onclick: () => { replyTo = null; renderComposer(); } }, icon('x', 16))));
     if (announceMode) composerWrap.append(h('div', { class: 'replying' }, icon('megaphone', 16), h('div', { class: 'grow' }, 'Posting as an announcement to everyone'),
@@ -230,7 +230,7 @@ export function createChat(opts) {
     if (attach) composerWrap.append(h('div', { class: 'attach-preview' }, h('img', { src: attach.url, alt: 'Selected image preview' }),
       h('button', { class: 'btn icon sm', 'aria-label': 'Remove image', onclick: () => { attach = null; renderComposer(); } }, icon('x', 14))));
     emojiBox = h('div', { class: 'hidden', style: { marginBottom: '8px' } }, emojiPicker((e) => { ta.setRangeText(e, ta.selectionStart, ta.selectionEnd, 'end'); ta.focus(); }));
-    ta = h('textarea', { rows: 1, placeholder: announceMode ? 'Write an announcement…' : (isGroup ? 'Message the group…' : 'Write a message…'), maxlength: 4000, 'aria-label': 'Message' });
+    ta = h('textarea', { rows: 1, placeholder: announceMode ? 'Write an announcement…' : (placeholder || (isGroup ? 'Message the group…' : 'Write a message…')), maxlength: maxLen, 'aria-label': 'Message' });
     ta.value = keep;
     ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(hover: hover)').matches) { e.preventDefault(); submit(); } });
@@ -240,7 +240,7 @@ export function createChat(opts) {
       caps.poll ? { label: 'Create a poll', icon: 'poll', onClick: () => openPollCreator(async (v) => { await adapter.createPoll(v); reconcile(); }) } : null,
       caps.announce ? { label: 'Post an announcement', icon: 'megaphone', onClick: () => { announceMode = true; replyTo = null; renderComposer(); $('textarea', composerWrap)?.focus(); } } : null]) }, icon('plus', 22)));
     composerWrap.append(emojiBox, h('div', { class: 'composer' }, ...extras,
-      h('button', { class: 'iconbtn', 'aria-label': 'Add photo', onclick: pickImage }, icon('image', 22)),
+      noImages ? null : h('button', { class: 'iconbtn', 'aria-label': 'Add photo', onclick: pickImage }, icon('image', 22)),
       h('button', { class: 'iconbtn', 'aria-label': 'Emoji', onclick: () => emojiBox.classList.toggle('hidden') }, icon('smile', 22)), ta, sendBtn));
     if (keep) ta.dispatchEvent(new Event('input'));
   }
