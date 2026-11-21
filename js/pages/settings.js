@@ -5,7 +5,7 @@ import { store, refreshAccount, signOut } from '../store.js';
 import { h, icon, setTitle, toast, toastError, withBusy, confirmDialog, modal, empty, errorState, skeletons, ago, errMsg } from '../ui.js';
 import { navigate } from '../router.js';
 import { clientKey } from '../clientkey.js';
-import { S as keyS, initKeys, deleteBackup } from '../keys.js';
+import { S as keyS, initKeys, deleteBackup, kindLabel } from '../keys.js';
 import { pushStatus, enablePush, disablePush, isIOS } from '../push.js';
 import { openBackupSetup, openRestore } from '../views/keyui.js';
 
@@ -42,12 +42,12 @@ function keysCard() {
   const box = h('div', { class: 'stack', style: { gap: '4px' } }, skeletons(1, 48));
   const row = (title, hint, ...btns) => h('div', { class: 'setting' }, h('div', null, h('div', { style: { fontWeight: 600 } }, title), h('div', { class: 'hint' }, hint)), h('div', { class: 'row', style: { gap: '6px' } }, ...btns));
   function paint() {
-    const kind = keyS.backupKind === 'recovery' ? 'recovery code' : 'passphrase';
+    const kind = kindLabel(keyS.backupKind);
     box.replaceChildren(
       row('Keys on this device', keyS.status === 'ready' ? 'Ready. Private chats are end-to-end encrypted.' : keyS.status === 'need-restore' ? 'This device doesn’t have your keys yet. Restore them to open older private messages.'
         : keyS.status === 'unavailable' ? 'This browser can’t store keys (private/incognito mode?). Private chats won’t work here.' : 'Checking…',
         keyS.status === 'need-restore' ? h('button', { class: 'btn sm primary', onclick: () => openRestore(() => { paint(); }) }, 'Restore') : null),
-      keyS.status === 'ready' ? row('Backup', keyS.hasBackup ? 'On · protected by your ' + kind + '. Use it to restore your chats on a new phone or computer.' : 'Not set up. If you lose this device, older private messages and voice notes can’t be recovered.',
+      keyS.status === 'ready' ? row('Backup', keyS.hasBackup ? 'On · protected by your ' + kind + (keyS.backupKind === 'account' ? '. Automatic: sign in on a new phone or computer and your chats open by themselves. For extra strength, switch to a recovery code.' : '. Use it to restore your chats on a new phone or computer.') : 'Not set up yet. Sign out and sign in again to turn on automatic backup, or set up a recovery code now.',
         h('button', { class: 'btn sm' + (keyS.hasBackup ? '' : ' primary'), onclick: () => openBackupSetup(paint) }, keyS.hasBackup ? 'Change' : 'Set up'),
         keyS.hasBackup ? h('button', { class: 'btn sm', onclick: async () => { if (!await confirmDialog({ title: 'Delete your key backup?', message: 'You won’t be able to restore your older private chats on a new device unless you set up a new backup.', confirmText: 'Delete backup', danger: true })) return; try { await deleteBackup(); paint(); toast('Backup deleted', 'success', 1800); } catch (e) { toastError(e); } } }, 'Delete') : null) : null,
       h('p', { class: 'hint', style: { margin: '6px 0 0' } }, 'Your keys are made and kept on your device. UNSAID can’t read your private chats or your backup, and can’t reset a lost passphrase or code.'));
@@ -107,6 +107,7 @@ export async function account() {
       if (re.error) { err.textContent = 'Your current password is incorrect.'; return; }
       const { error } = await sb.auth.updateUser({ password: n1.value });
       if (error) { err.textContent = errMsg(error); return; }
+      try { const k = await import('../keys.js'); await k.syncBackupPassword(store.session?.user?.id, n1.value); } catch { /* backup follows next sign-in */ }
       cur.value = n1.value = n2.value = ''; toast('Password changed', 'success');
     });
   } },

@@ -14,6 +14,10 @@ const BATCH = 50, LOW = 20;
 export const S = { status: 'idle', hasBackup: false, backupKind: null, backupAt: null, uid: null };
 const notify = () => emit('keys');
 let running = null;
+let pendingPw = null;
+/** Called by the sign-in page with the password just typed. Used once (then forgotten) to keep the key backup in step with the account password. */
+export function rememberSignInPassword(pw) { pendingPw = pw || null; if (pw) setTimeout(() => { if (pendingPw === pw) pendingPw = null; }, 120000); }
+export const kindLabel = (k) => k === 'recovery' ? 'recovery code' : k === 'account' ? 'account password' : 'passphrase';
 
 export function initKeys(uid) {
   if (running) return running;
@@ -31,6 +35,14 @@ export function initKeys(uid) {
       seed = await saveSeedIfAbsent(uid, newSeed());
       await rpc('upload_prekeys', { p_keys: await prekeyBatch(seed, 0, BATCH), p_reset: true });
       S.status = 'ready';
+    }
+    const pw = pendingPw; pendingPw = null;
+    if (pw) {
+      try {
+        if (S.status === 'need-restore' && S.backupKind === 'account') { if (await restoreBackup(uid, pw)) seed = await getSeed(uid); }       // new device: chats unlock by themselves
+        else if (S.status === 'ready' && !S.hasBackup) await createBackup(uid, pw, 'account');                                              // first sign-in: automatic backup
+        else if (S.status === 'ready' && S.backupKind === 'account') { const b = await rpc('get_key_backup'); if (b && !(await unwrapSeed(pw, b))) await createBackup(uid, pw, 'account'); }   // password was reset: keep in step
+      } catch { /* the manual restore prompt still works */ }
     }
     if (S.status === 'ready') await ensureConvKeys(seed);
     notify(); return S;
@@ -87,9 +99,14 @@ export async function startNewSeed(uid) {
 /** secret: the passphrase, or the recovery code. kind: 'passphrase' | 'recovery'. */
 export async function createBackup(uid, secret, kind) {
   const seed = await getSeed(uid); if (!seed || S.status !== 'ready') throw new Error('This device has no keys to back up yet.');
-  const w = await wrapSeed(seed, kind === 'recovery' ? cleanRecoveryCode(secret) : secret);
+  const w = await wrapSeed(seed, kind === 'recovery' ? cleanRecoveryCode(secret) : secret);   // 'account' and 'passphrase' use the text as typed
   await rpc('save_key_backup', { p_kind: kind, p_salt: w.salt, p_iters: w.iters, p_blob: w.blob });
   S.hasBackup = true; S.backupKind = kind; S.backupAt = new Date().toISOString(); notify();
+}
+/** After a password change: re-lock the backup with the new password (only an automatic account-password backup follows the password). */
+export async function syncBackupPassword(uid, newPassword) {
+  if (S.status !== 'ready' || !newPassword) return;
+  if (!S.hasBackup || S.backupKind === 'account') await createBackup(uid, newPassword, 'account');
 }
 /** Returns true on success, false when the passphrase / code is wrong. */
 export async function restoreBackup(uid, secret) {

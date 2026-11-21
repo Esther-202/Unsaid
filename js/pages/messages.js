@@ -9,7 +9,7 @@ import { openReport } from '../views/report.js';
 import { h, icon, avatar, actionSheet, confirmDialog, toast, toastError, modal, setTitle, withBusy, empty, errorState, skeletons, ago } from '../ui.js';
 import { navigate, refresh } from '../router.js';
 import { isE2E, deriveConvKey, encryptText, decryptText, exportKeyB64, safetyCode } from '../e2ee.js';
-import { initKeys, conversationKey, startFreshChat, S as keyS } from '../keys.js';
+import { initKeys, conversationKey, startFreshChat, kindLabel, S as keyS } from '../keys.js';
 import { openBackupSetup, openRestore } from '../views/keyui.js';
 import { micSupported, startRecording, uploadVoice, loadVoice } from '../voice.js';
 
@@ -88,7 +88,7 @@ export async function requests() {
 }
 
 // ── private conversation (end-to-end encrypted) ───────────────
-const UNREADABLE = '🔒 Can’t be opened on this device';
+const UNREADABLE = '🔒 Locked. Opens when your keys are on this device';
 export async function conversation(ctx) {
   const id = ctx.params.id;
   let c;
@@ -113,14 +113,14 @@ export async function conversation(ctx) {
   const lockedText = c.closed ? 'This conversation has been closed. You can still read it.'
     : restricted ? 'Your account is restricted, so you can read but not send messages.'
     : state === 'waiting' ? '🔒 Almost ready. This chat is end-to-end encrypted, and the other person’s phone hasn’t made its key yet. You can send as soon as they open UNSAID once.'
-    : state === 'lost' ? (keyS.status === 'need-restore' && keyS.hasBackup ? '🔒 This device doesn’t have your private chat keys yet. Restore them with your recovery code or passphrase to open your older messages.' : '🔒 This chat’s keys aren’t on this device (a different browser, or its data was cleared). Older messages can’t be opened here.')
+    : state === 'lost' ? (keyS.status === 'need-restore' && keyS.hasBackup ? '🔒 Your messages are safe and still here. This device just needs your keys to open them. Unlock them with your ' + kindLabel(keyS.backupKind) + '.' : '🔒 Your messages are safe and still here, but their keys are on another browser or phone (on iPhone, Safari and the Home Screen app are separate). Open UNSAID there once and your chats will unlock here after you set up a backup.')
     : '🔒 Private chats need your browser to store a secret key, and it can’t here. Turn off private/incognito mode and try again.';
   const lockedAction = (state === 'lost' && !c.closed && !restricted)
-    ? [...(keyS.hasBackup ? [{ label: 'Restore my keys', onClick: () => openRestore(() => refresh()) }] : []), { label: 'Start fresh on this device', onClick: startFresh }] : null;
+    ? [...(keyS.hasBackup ? [{ label: 'Unlock my chats', onClick: () => openRestore(() => refresh()) }] : []), { label: 'Start new keys for this chat', onClick: startFresh }] : null;
   let chat;
 
   async function startFresh() {
-    if (!await confirmDialog({ title: 'Start fresh on this device?', message: 'You’ll be able to send and receive new messages here. Older messages in this chat can’t be opened by either of you afterwards. The other person is told your security code changed.', confirmText: 'Start fresh', danger: true })) return;
+    if (!await confirmDialog({ title: 'Start new keys for this chat?', message: 'Only do this if you can’t unlock your chats. You’ll be able to send and receive new messages here, but older messages in this chat can’t be opened by either of you afterwards. The other person is told your security code changed.', confirmText: 'Start new keys', danger: true })) return;
     try {
       await startFreshChat(uid, id);
       refresh();
@@ -205,6 +205,8 @@ export async function conversation(ctx) {
     if (document.hidden) return;
     try { const n = await rpc('get_conversation', { p_conv: id }); if (n && (n.other_key !== c.other_key || n.my_key !== c.my_key || n.voice_state !== c.voice_state) && !chat.isRecording?.()) { clearInterval(keyWatch); refresh(); } } catch { /* offline */ }
   }, 15000);
+  // keys can arrive while the chat is open (automatic unlock after sign-in, or a restore): retry reading at once
+  const unsubKeys = subscribe((evt) => { if (evt === 'keys' && state === 'lost' && keyS.status === 'ready') refresh(); });
   const f = frame({ activeId: id, open: true, right: chat.el });
-  return { el: f.el, destroy: () => { clearInterval(keyWatch); chat.destroy(); f.destroy(); } };
+  return { el: f.el, destroy: () => { clearInterval(keyWatch); unsubKeys(); chat.destroy(); f.destroy(); } };
 }

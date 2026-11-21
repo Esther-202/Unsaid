@@ -1,7 +1,7 @@
 // Screens for the key backup: set up, restore on a new device, start over.
 import { h, modal, toast, toastError, withBusy, confirmDialog, copyText } from '../ui.js';
 import { store } from '../store.js';
-import { S, createBackup, restoreBackup, startNewSeed } from '../keys.js';
+import { S, createBackup, restoreBackup, startNewSeed, kindLabel } from '../keys.js';
 import { newRecoveryCode } from '../e2ee.js';
 
 const uid = () => store.session?.user?.id;
@@ -50,11 +50,11 @@ export function openBackupSetup(onDone) {
 
 /** Enter the passphrase / recovery code to bring the keys back on this device. */
 export function openRestore(onDone) {
-  const secret = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: S.backupKind === 'recovery' ? 'Recovery code (XXXX-XXXX-…)' : 'Your passphrase', 'aria-label': 'Passphrase or recovery code' });
+  const secret = h('input', { class: 'input', type: 'password', autocomplete: 'off', placeholder: S.backupKind === 'recovery' ? 'Recovery code (XXXX-XXXX-…)' : S.backupKind === 'account' ? 'Your account password (the one you had when you set up)' : 'Your passphrase', 'aria-label': 'Passphrase or recovery code' });
   const err = h('div', { class: 'error-text', role: 'alert' });
   const m = modal({ title: 'Restore your private chat keys', body: h('div', { class: 'stack', style: { gap: '10px' } },
       h('p', { class: 'muted small', style: { margin: 0 } }, S.hasBackup
-        ? 'This device doesn’t have your private chat keys yet. Enter your ' + (S.backupKind === 'recovery' ? 'recovery code' : 'passphrase') + ' to open your older private messages here.'
+        ? 'This device doesn’t have your private chat keys yet. Enter your ' + kindLabel(S.backupKind) + ' to open your private messages here.'
         : 'This account has private chat keys on another device, but no backup was set up. Without a backup, older private messages can’t be opened here. You can start new keys instead.'),
       S.hasBackup ? secret : null, err),
     actions: [h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Later'),
@@ -65,7 +65,7 @@ export function openRestore(onDone) {
       S.hasBackup ? h('button', { class: 'btn primary', onclick: (e) => withBusy(e.currentTarget, async () => {
         err.textContent = ''; if (!secret.value.trim()) { err.textContent = 'Enter it first.'; return; }
         const ok = await restoreBackup(uid(), secret.value.trim());
-        if (!ok) { err.textContent = S.backupKind === 'recovery' ? 'That code doesn’t match. Check it and try again.' : 'That passphrase doesn’t match. Check it and try again.'; return; }
+        if (!ok) { err.textContent = S.backupKind === 'recovery' ? 'That code doesn’t match. Check it and try again.' : 'That doesn’t match. Check it and try again.'; return; }
         m.close(); toast('Keys restored. Your older private chats can be opened on this device.', 'success', 5000); onDone?.();
       }).catch((er) => { err.textContent = er.message || 'Couldn’t restore.'; }) }, 'Restore') : null].filter(Boolean) });
   setTimeout(() => secret.focus(), 50);

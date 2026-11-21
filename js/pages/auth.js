@@ -35,9 +35,10 @@ export function login() {
     const ok = setErr(eW, emailOk(email.value.trim()) ? '' : 'Enter a valid email address.') & setErr(pW, pw.value ? '' : 'Enter your password.'); if (!ok) return;
     await withBusy(btn, async () => {
       let captchaToken; try { captchaToken = await cap.token(); } catch (er) { msg.textContent = errMsg(er); msg.classList.remove('hidden'); return; }
+      const { rememberSignInPassword } = await import('../keys.js'); rememberSignInPassword(pw.value);
       const { error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pw.value, options: { captchaToken } });
       cap.reset();
-      if (error) {
+      if (error) { rememberSignInPassword(null);
         const m = /Invalid login/i.test(error.message) ? 'That email and password don’t match.' : /not confirmed/i.test(error.message) ? 'Please verify your email first. Check your inbox.' : /banned/i.test(error.message) ? 'This account is not available.' : errMsg(error);
         msg.textContent = m; msg.classList.remove('hidden'); if (/verify/i.test(m)) resend.classList.remove('hidden');
       }
@@ -141,7 +142,7 @@ export function reset() {
   const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Update password');
   const form = h('form', { novalidate: true, onsubmit: async (e) => {
     e.preventDefault(); const ok = setErr(pW, pwProblem(pw.value) || '') & setErr(p2W, pw.value === pw2.value ? '' : 'Passwords don’t match.'); if (!ok) return;
-    await withBusy(btn, async () => { const { error } = await sb.auth.updateUser({ password: pw.value }); if (error) throw error; store.recovery = false; toast('Password updated.', 'success'); navigate('/home'); });
+    await withBusy(btn, async () => { const { error } = await sb.auth.updateUser({ password: pw.value }); if (error) throw error; store.recovery = false; try { const k = await import('../keys.js'); await k.syncBackupPassword(store.session?.user?.id, pw.value); } catch { /* backup follows next sign-in */ } toast('Password updated.', 'success'); navigate('/home'); });
   } }, pW, p2W, btn);
   return shell(h('h1', null, 'Choose a new password'), form);
 }
