@@ -41,6 +41,8 @@ route('/verify', lazy('./pages/auth.js', 'verify'), { layout: 'bare', auth: 'any
 route('/reset', lazy('./pages/auth.js', 'reset'), { layout: 'bare', auth: 'any' });
 route('/account', lazy('./pages/locked.js'), { layout: 'bare', auth: 'in', allowLocked: true });
 route('/home', lazy('./pages/home.js'), { auth: 'in' });
+route('/today', lazy('./pages/today.js'), { auth: 'in' });
+route('/letters', lazy('./pages/letters.js'), { auth: 'in' });
 route('/explore', lazy('./pages/explore.js'), { auth: 'in' });
 route('/groups', lazy('./pages/groups.js'), { auth: 'in' });
 route('/groups/new', lazy('./pages/group-create.js'), { auth: 'in' });

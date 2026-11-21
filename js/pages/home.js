@@ -3,7 +3,8 @@ import { store } from '../store.js';
 import { h, icon, errorState, skeletons, setTitle, modal, ago } from '../ui.js';
 import { myGroupRow, conversationRow, discussionRow, groupCard } from '../views/cards.js';
 import { navigate } from '../router.js';
-import { nextPrompt } from '../prompts.js';
+import { nextPrompt, todayPrompt } from '../prompts.js';
+import { moodRow, streakChip } from '../views/daily.js';
 
 const moreLink = (href, text) => h('a', { href, class: 'small', style: { textTransform: 'none', letterSpacing: 0 } }, text);
 
@@ -12,17 +13,24 @@ export default async function home() {
   const root = h('div');
   const section = (title, body, more) => { const el = h('section', { class: 'section' }, h('h2', null, title, more), body); return el; };
 
-  // ── a system prompt (written by the UNSAID team, never a fake message) ─────────
-  let current = nextPrompt();
-  const q = h('div', { class: 'q' }, current);
+  // ── today's question (written by the UNSAID team, never a fake message) ─────────
+  let current = todayPrompt();
+  const dyn = h('div', { class: 'tday' });
   const card = h('div', { class: 'prompt-card' },
-    h('div', { class: 'kicker' }, icon('sparkles', 15), 'A thought to start with'),
-    q,
+    h('div', { class: 'kicker' }, icon('sparkles', 15), 'A thought to start with', h('span', { class: 'spacer' }), h('span', { class: 'streakslot' })),
+    h('div', { class: 'q' }, current),
     h('div', { class: 'acts' },
-      h('button', { class: 'btn primary', onclick: () => sayInGroup(current) }, icon('chat', 18), 'Say it in a group'),
-      h('button', { class: 'btn ghost', onclick: () => { try { sessionStorage.setItem('unsaid.groupdraft', current); } catch { /* storage unavailable */ } navigate('/groups/new'); } }, 'Start a group about this'),
+      h('a', { class: 'btn primary', href: '#/today' }, icon('edit', 18), 'Answer anonymously'),
+      h('button', { class: 'btn ghost', onclick: () => sayInGroup(current) }, icon('chat', 18), 'Say it in a group'),
       h('span', { class: 'spacer' }),
-      h('button', { class: 'btn ghost sm', 'aria-label': 'Show another prompt', onclick: () => { current = nextPrompt(); q.textContent = current; card.classList.remove('swap'); void card.offsetWidth; card.classList.add('swap'); } }, icon('refresh', 16), 'Another')));
+      h('a', { class: 'btn ghost sm', href: '#/letters' }, icon('mail', 16), 'Unsent letters')),
+    dyn);
+  rpc('today_state').then((st) => {
+    card.querySelector('.streakslot').replaceChildren(streakChip(st.streak));
+    dyn.append(h('div', { class: 'faint small', style: { margin: '14px 0 6px' } }, 'How are you feeling today?'), moodRow(st.mood),
+      h('a', { class: 'small', href: '#/today', style: { display: 'inline-block', marginTop: '10px', textTransform: 'none', letterSpacing: 0 } },
+        st.answer ? `${st.answers} answer${st.answers === 1 ? '' : 's'} today · read them` : st.answers ? `Read ${st.answers} anonymous answer${st.answers === 1 ? '' : 's'}` : 'Be the first to answer today'));
+  }).catch(() => { /* the card still works without the extras (e.g. before the update is installed) */ });
 
   async function sayInGroup(text) {
     let gs = [];

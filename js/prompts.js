@@ -52,3 +52,9 @@ export function nextPrompt() {
   write([...seen, pick]);
   return PROMPTS[pick];
 }
+
+// Today's question: the same for everybody, changes at midnight UTC.
+export function todayPrompt() {
+  const day = Math.floor(Date.now() / 86400000);
+  return PROMPTS[((day * 7919) % PROMPTS.length + PROMPTS.length) % PROMPTS.length];
+}

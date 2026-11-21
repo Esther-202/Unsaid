@@ -1,0 +1,21 @@
+.prompt-card .kicker { width: 100%; } .prompt-card .kicker .spacer { flex: 1; }
+.streak { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 999px; font-size: .82rem; font-weight: 700; border: 1px solid var(--line); color: var(--muted); text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.streak.on { color: #ffb36b; border-color: rgba(255,179,107,.45); background: rgba(255,179,107,.1); }
+.moods { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.mood { display: grid; gap: 2px; justify-items: center; padding: 8px 2px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; font: inherit; min-height: 56px; }
+.mood .f { font-size: 1.5rem; line-height: 1; } .mood .l { font-size: .68rem; }
+.mood:hover { border-color: var(--faint); } .mood.on { background: var(--accent-soft); border-color: rgba(169,157,243,.55); color: var(--text); }
+.composer { margin: 16px 0; display: grid; gap: 10px; } .composer .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; } .composer .spacer, .dbar .spacer { flex: 1; }
+.sec { font-size: 1rem; margin: 18px 0 8px; }
+.seg { display: inline-flex; gap: 4px; } .seg .btn.on { background: var(--accent-soft); color: var(--accent); }
+.dpost { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: linear-gradient(135deg, hsla(var(--h), 70%, 60%, .10), transparent 65%), var(--surface); display: grid; gap: 8px; }
+.dpost .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.dpost.letter .body { font-family: Georgia, 'Times New Roman', serif; font-size: 1.05rem; line-height: 1.6; }
+.dpost .to { font-family: Georgia, serif; font-style: italic; color: var(--muted); }
+.dbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dbar .main.on, .dbar .rx.on { background: var(--accent-soft); border-color: rgba(169,157,243,.55); color: var(--accent); }
+.dbar .rx { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; font: inherit; }
+.dbar .n { font-size: .78rem; margin-left: 4px; opacity: .85; }
+.dbar .chip.mine { min-height: 30px; }
+.qr { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chat-streak { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; color: #ffb36b; font-weight: 700; }

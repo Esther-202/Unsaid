@@ -47,7 +47,7 @@ const card = (title, ...kids) => h('div', { class: 'card', style: { marginBottom
 const fmt = (s) => String(s || '').replace(/_/g, ' ');
 
 // ── shell ─────────────────────────────────────────────────────
-const NAV = [['/', 'Overview'], ['/reports', 'Reports'], ['/users', 'Users'], ['/security', 'Security'], ['/suggestions', 'Suggestions'], ['/actions', 'Moderation log'], ['/audit', 'Audit log']];
+const NAV = [['/', 'Overview'], ['/reports', 'Reports'], ['/users', 'Users'], ['/security', 'Security'], ['/suggestions', 'Suggestions'], ['/today', 'Today & letters'], ['/actions', 'Moderation log'], ['/audit', 'Audit log']];
 const content = h('main', { class: 'admin-body', id: 'view' });
 const nav = h('nav', { class: 'row wrap', 'aria-label': 'Admin sections' }, NAV.map(([p, l]) => h('a', { class: 'chip', href: '#' + p, dataset: { p } }, l)));
 app.replaceChildren(h('div', { class: 'admin-shell' }, h('header', { class: 'admin-top' }, h('a', { class: 'brand', href: '#/' }, h('span', { class: 'brand-mark' }, icon('shield', 17)), 'UNSAID Admin'), nav,
@@ -66,6 +66,7 @@ route('/users', users, { layout: 'admin' });
 route('/users/:id', userDetail, { layout: 'admin' });
 route('/security', security, { layout: 'admin' });
 route('/suggestions', suggestions, { layout: 'admin' });
+route('/today', todayAdmin, { layout: 'admin' });
 route('/actions', actionsLog, { layout: 'admin' });
 route('/audit', auditLog, { layout: 'admin' });
 route('/__404__', () => ({ el: empty('search', 'Not found', '', h('a', { class: 'btn', href: '#/' }, 'Overview')) }), { notFound: true, layout: 'admin' });
@@ -249,6 +250,25 @@ async function security() {
 }
 
 // ── suggestion box ────────────────────────────────────────────
+async function todayAdmin() {
+  const body = h('div', null, skeletons(3, 70));
+  async function load() {
+    body.replaceChildren(skeletons(3, 70));
+    try {
+      const r = await rpc('admin_list_daily_flagged');
+      body.replaceChildren(...(r.length ? r.map((x) => card(null,
+        h('div', { class: 'row between' }, h('div', { class: 'row' }, h('span', { class: 'tag' }, x.kind === 'letter' ? 'Letter' : 'Answer'), h('span', { class: 'tag' }, `${x.flags} report${x.flags === 1 ? '' : 's'}`), x.hidden ? h('span', { class: 'tag' }, 'Hidden') : null), h('span', { class: 'hint' }, ago(x.created_at) + ' ago')),
+        x.to_label ? h('p', { class: 'hint', style: { margin: '8px 0 0' } }, 'To ' + x.to_label) : null,
+        h('p', { style: { margin: '10px 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, x.body),
+        h('div', { class: 'row wrap' },
+          h('button', { class: 'btn sm', onclick: (e) => withBusy(e.currentTarget, async () => { await rpc('admin_set_daily_hidden', { p_kind: x.kind, p_id: x.id, p_hidden: !x.hidden }); toast('Saved', 'success', 1200); load(); }) }, x.hidden ? 'Restore (clears reports)' : 'Hide'),
+          h('button', { class: 'btn sm danger', onclick: async (e) => { if (!(await confirmDialog({ title: 'Delete permanently?', message: 'This removes it and its reactions.', confirmText: 'Delete', danger: true }))) return; await withBusy(e.currentTarget, async () => { await rpc('admin_delete_daily', { p_kind: x.kind, p_id: x.id }); toast('Deleted', 'success', 1200); load(); }); } }, 'Delete')))) : [h('p', { class: 'muted' }, 'Nothing reported.')]));
+    } catch (e) { body.replaceChildren(errorState(e, load)); }
+  }
+  load();
+  return { el: h('div', null, h('div', { class: 'page-head' }, h('h1', null, 'Today & letters')), h('p', { class: 'hint' }, 'Reported answers and letters. You see the text only, never who wrote it.'), body) };
+}
+
 async function suggestions() {
   let filter = 'new';
   const body = h('div', null, skeletons(3, 70)); const chips = h('div', { class: 'chips', style: { marginBottom: '14px' } });

@@ -135,10 +135,19 @@ export async function conversation(ctx) {
       actions: [h('button', { class: 'btn primary', onclick: () => m.close() }, 'Done')] });
   }
 
+  // a streak for the two of you: counts only the DAYS you both wrote, never the content
+  const streakEl = h('span', { class: 'chat-streak' });
+  const loadStreak = async () => {
+    try {
+      const sr = await rpc('chat_streak', { p_conv: id }); const n = sr.current || 0;
+      streakEl.textContent = n >= 2 ? ` · 🔥 ${n} days` : ''; streakEl.title = n >= 2 ? `You’ve both written ${n} days in a row${sr.both_today ? '' : '. Write today to keep it going'}` : '';
+    } catch { streakEl.textContent = ''; }
+  };
+  loadStreak();
   const head = h('div', { class: 'chat-head' },
     h('a', { class: 'iconbtn', href: '#/messages', 'aria-label': 'Back to messages' }, icon('back', 22)),
     h('div', { class: 'who', style: { cursor: 'default' } }, avatar(c.other_avatar, c.other_alias, 38),
-      h('div', { style: { minWidth: 0 } }, h('div', { class: 'name truncate mono' }, c.other_alias), h('div', { class: 'sub truncate' }, '🔒 Encrypted · you are ', h('span', { class: 'mono' }, c.my_alias)))),
+      h('div', { style: { minWidth: 0 } }, h('div', { class: 'name truncate mono' }, c.other_alias), h('div', { class: 'sub truncate' }, '🔒 Encrypted · you are ', h('span', { class: 'mono' }, c.my_alias), streakEl))),
     h('button', { class: 'iconbtn', 'aria-label': 'Conversation menu', onclick: menu }, icon('more', 21)));
 
   function menu() {
@@ -203,6 +212,7 @@ export async function conversation(ctx) {
   // the other person may open the chat, or start fresh on a new device: pick up the new key
   const keyWatch = setInterval(async () => {
     if (document.hidden) return;
+    loadStreak();
     try { const n = await rpc('get_conversation', { p_conv: id }); if (n && (n.other_key !== c.other_key || n.my_key !== c.my_key || n.voice_state !== c.voice_state) && !chat.isRecording?.()) { clearInterval(keyWatch); refresh(); } } catch { /* offline */ }
   }, 15000);
   // keys can arrive while the chat is open (automatic unlock after sign-in, or a restore): retry reading at once

@@ -76,3 +76,7 @@ Persistent login: Supabase keeps people signed in with a refresh token stored by
 - **Rate limits** are enforced in the database (messages, requests, reports, group creation, etc.). Add Supabase Auth rate limits and CAPTCHA (Authentication → Rate Limits / Attack Protection) before a public launch.
 - Email is required for sign-up; admins can see it only while investigating a report. Verifying an email proves control of that inbox, not a person's identity, and the app never claims otherwise.
 - **Sessions & flags**: the app records the browser family, system and device type of each login (no IP addresses, no fingerprinting). Flags are signals for a human to review; nothing is punished automatically, because a phone plus a laptop is normal.
+
+
+## Today (answers, mood, unsent letters, streaks)
+Run `supabase/12_today.sql` (it is already inside RUN-THIS-IN-SUPABASE.sql). Pages: `#/today`, `#/letters`; the Home card shows today's question, mood and your streak. Everything is anonymous; a "day" is the UTC day. Three different people reporting an item hides it; admins review it under "Today & letters". Tests: `supabase/tests/today_tests.sql`.
