@@ -13,7 +13,7 @@ export default async function today() {
   const box = h('textarea', { class: 'textarea', maxlength: 280, rows: 3, placeholder: 'Your answer, anonymously…', 'aria-label': 'Your answer' });
   const count = h('span', { class: 'faint small' }, '0/280');
   box.addEventListener('input', () => { count.textContent = `${box.value.length}/280`; });
-  const comp = h('div', { class: 'composer card' });
+  const comp = h('div', { class: 'answer-box card' });
   const drawComposer = () => {
     if (st.answer) {
       comp.replaceChildren(h('div', { class: 'faint small' }, 'Your answer today'), h('p', { class: 'body' }, st.answer.body),

@@ -5,7 +5,7 @@
 .mood { display: grid; gap: 2px; justify-items: center; padding: 8px 2px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; font: inherit; min-height: 56px; }
 .mood .f { font-size: 1.5rem; line-height: 1; } .mood .l { font-size: .68rem; }
 .mood:hover { border-color: var(--faint); } .mood.on { background: var(--accent-soft); border-color: rgba(169,157,243,.55); color: var(--text); }
-.composer { margin: 16px 0; display: grid; gap: 10px; } .composer .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; } .composer .spacer, .dbar .spacer { flex: 1; }
+.answer-box { margin: 16px 0; display: grid; gap: 10px; } .answer-box .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; } .answer-box .spacer, .dbar .spacer { flex: 1; }
 .sec { font-size: 1rem; margin: 18px 0 8px; }
 .seg { display: inline-flex; gap: 4px; } .seg .btn.on { background: var(--accent-soft); color: var(--accent); }
 .dpost { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: linear-gradient(135deg, hsla(var(--h), 70%, 60%, .10), transparent 65%), var(--surface); display: grid; gap: 8px; }
