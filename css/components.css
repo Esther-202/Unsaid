@@ -117,3 +117,8 @@
 @keyframes promptIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .prompt-card.swap .q { animation: none; } }
 .home-note { margin: 0 0 18px; }
+.emoji-tabs { display: flex; gap: 2px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.emoji-tabs button { flex: none; font-size: 1.2rem; background: transparent; border: 0; border-radius: 8px; padding: 4px 10px; opacity: .6; }
+.emoji-tabs button.on { background: var(--surface-3); opacity: 1; }
+.emoji-grid { max-height: 260px; }
+.input.bad { border-color: #ff6b6b; }

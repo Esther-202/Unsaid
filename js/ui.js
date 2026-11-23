@@ -182,9 +182,41 @@ export const CATEGORIES = [
 export const categoryLabel = (c) => (CATEGORIES.find((x) => x[0] === c) || [, c])[1];
 export const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-const EMOJI = '😀 😃 😄 😁 😆 😅 😂 🤣 🥲 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😋 😛 😜 🤪 🤗 🤔 🤐 😐 😑 😶 🙄 😏 😮 😲 🥱 😴 😪 😔 😟 😕 🙁 😢 😭 😤 😠 😡 🥺 😳 😱 😰 😥 😓 🤭 🫣 🫡 🤝 👍 👎 👏 🙌 🙏 💪 👀 💯 🔥 ✨ 🎉 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💬 🌙 ⭐ 🌈 ☕ 🍕 🎵 📚 💡 🧠 🌱 🫶'.split(' ');
-export function emojiPicker(onPick) {
-  return h('div', { class: 'emoji-grid' }, EMOJI.map((e) => h('button', { type: 'button', 'aria-label': e, onclick: () => onPick(e) }, e)));
+const rng = (a, b, skip = []) => { const o = []; for (let c = a; c <= b; c++) if (!skip.includes(c)) o.push(String.fromCodePoint(c)); return o; };
+const strs = (t) => t.split(/\s+/).filter(Boolean);
+export const EMOJI_GROUPS = [
+  ['😀', 'Faces', [...rng(0x1F600, 0x1F637), ...rng(0x1F641, 0x1F644), ...rng(0x1F910, 0x1F915), '🤗', ...rng(0x1F920, 0x1F925), ...rng(0x1F927, 0x1F92F), '🥰', '🥳', '🥴', '🥵', '🥶', '🥺', '🧐', '🫠', '🫡', '🫣', '🫢', '🥹', '🫥']],
+  ['👍', 'People', strs('👋 🤚 ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 👀 👁️ 👅 👄 🧠 🫶 🫂 🙋 🙆 🙅 🤷 🤦 💃 🕺 🚶 🏃 👶 🧒 👧 👦 👩 👨 🧓 👵 👴')],
+  ['❤️', 'Hearts', strs('❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ❤️‍🔥 💋 💯 💢 💥 💫 💦 💤 💬 💭 🗯️ ✨ ⭐ 🌟 ⚡ 🔥 🎉 🎊 🎈 🏆 👑 💎 🔔 ✅ ❌ ❓ ❗ ‼️ ⁉️ ♾️')],
+  ['🐶', 'Animals', [...rng(0x1F400, 0x1F43E), ...rng(0x1F980, 0x1F991), ...strs('🌸 🌹 🌺 🌻 🌼 🌷 🌱 🌲 🌳 🌴 🍀 🍁 🍂 🍃 🌈 ☀️ 🌙 ⛅ ☁️ 🌧️ ⛈️ ❄️ ☃️ 🌊')]],
+  ['🍕', 'Food', [...rng(0x1F345, 0x1F37B), ...rng(0x1F950, 0x1F96B), '☕']],
+  ['⚽', 'Fun', [...rng(0x1F380, 0x1F393), ...rng(0x1F3A0, 0x1F3AF), '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🎱', '🥇', '🥈', '🥉', ...rng(0x1F4DA, 0x1F4DC), '📱', '💻', '📷', '🎧', '🎤', '🎬', '💡', '🔑', '🔒', '🎁']],
+  ['✈️', 'Places', [...rng(0x1F680, 0x1F6A4), ...rng(0x1F30D, 0x1F30F), '🏠', '🏫', '⛪', '🗽', '🗼', '🏝️', '🏔️', '🌋', '🌅', '🌃', '🌆']],
+];
+// anything that is really one emoji (including skin tones, flags and joined emoji) is accepted
+const oneEmoji = (t) => {
+  t = (t || '').trim(); if (!t || t.length > 16) return null;
+  const seg = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(t)];
+  return seg.length === 1 && /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u.test(t) ? t : null;
+};
+export function emojiPicker(onPick, { custom = false } = {}) {
+  const grid = h('div', { class: 'emoji-grid' });
+  const tabs = h('div', { class: 'emoji-tabs', role: 'tablist' });
+  const show = (i) => {
+    [...tabs.children].forEach((t, j) => t.classList.toggle('on', i === j));
+    grid.replaceChildren(...EMOJI_GROUPS[i][2].map((e) => h('button', { type: 'button', 'aria-label': e, onclick: () => onPick(e) }, e)));
+    grid.scrollTop = 0;
+  };
+  EMOJI_GROUPS.forEach(([ico, name], i) => tabs.append(h('button', { type: 'button', role: 'tab', 'aria-label': name, title: name, onclick: () => show(i) }, ico)));
+  show(0);
+  const wrap = h('div', { class: 'emoji-picker' }, tabs, grid);
+  if (custom) {
+    const inp = h('input', { class: 'input', placeholder: 'Or type / paste any emoji…', 'aria-label': 'Type or paste any emoji', maxlength: 16, inputmode: 'text', style: { flex: 1, minWidth: 0 } });
+    const add = () => { const e = oneEmoji(inp.value); if (!e) { inp.focus(); inp.classList.add('bad'); setTimeout(() => inp.classList.remove('bad'), 700); return; } onPick(e); };
+    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); add(); } });
+    wrap.append(h('div', { class: 'row', style: { marginTop: '10px' } }, inp, h('button', { type: 'button', class: 'btn primary sm', onclick: add }, 'Add')));
+  }
+  return wrap;
 }
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 export function lightbox(src) {

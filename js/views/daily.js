@@ -25,7 +25,7 @@ export function postCard(p, kind, mainLabel, { onGone } = {}) {
   const pick = () => {
     const m = modal({ title: 'React with anything', body: h('div', null,
       h('div', { class: 'qr' }, QUICK_REACTIONS.map((e) => h('button', { type: 'button', class: 'btn ghost', onclick: () => { m.close(); act(e); } }, e))),
-      emojiPicker((e) => { m.close(); act(e); })), actions: [h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Close')] });
+      emojiPicker((e) => { m.close(); act(e); }, { custom: true })), actions: [h('button', { class: 'btn ghost', onclick: () => m.close() }, 'Close')] });
   };
   function draw() {
     bar.replaceChildren(...[

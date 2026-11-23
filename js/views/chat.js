@@ -104,8 +104,7 @@ export function createChat(opts) {
     if (!mine) row.append(h('div', { class: 'av' }, h('button', { class: 'iconbtn', style: { width: '30px', height: '30px', padding: 0 }, 'aria-label': 'View profile of ' + m.username,
       onclick: () => onProfile?.(m) }, avatar(m.avatar, m.username, 30))));
     const wrap = h('div', { class: 'bubble-wrap' });
-    if (!mine && !cont) wrap.append(h('button', { class: 'sender', onclick: () => onProfile?.(m) }, m.username,
-      m.sender_role === 'admin' ? h('span', { class: 'tag admin' }, 'Admin') : m.sender_role === 'moderator' ? h('span', { class: 'tag mod' }, 'Mod') : null));
+    if (!mine && !cont) wrap.append(h('button', { class: 'sender', onclick: () => onProfile?.(m) }, m.username));
     wrap.append(bubble(m));
     if (m.reactions?.length) wrap.append(h('div', { class: 'reactions' }, m.reactions.map((r) =>
       h('button', { class: 'react' + (r.mine ? ' mine' : ''), 'aria-label': `${r.emoji} ${r.count}`, onclick: (e) => { e.stopPropagation(); doReact(m, r.emoji); } }, r.emoji, h('span', null, r.count)))));
@@ -180,7 +179,7 @@ export function createChat(opts) {
   function openActions(m) {
     const staff = caps.staff;
     const bar = h('div', { class: 'reactbar' }, QUICK_REACTIONS.map((e) => h('button', { 'aria-label': 'React ' + e, onclick: () => { o.close(); doReact(m, e); } }, e)),
-      h('button', { 'aria-label': 'More reactions', onclick: () => { o.close(); const pk = modal({ title: 'React', body: emojiPicker((e) => { pk.close(); doReact(m, e); }) }); } }, icon('plus', 20)));
+      h('button', { 'aria-label': 'More reactions', onclick: () => { o.close(); const pk = modal({ title: 'React', body: emojiPicker((e) => { pk.close(); doReact(m, e); }, { custom: true }) }); } }, icon('plus', 20)));
     const items = [
       m.deleted_at ? null : { label: 'Reply', icon: 'reply', onClick: () => setReply(m) },
       m.body ? { label: 'Copy text', icon: 'copy', onClick: () => copyText(m.body) } : null,
